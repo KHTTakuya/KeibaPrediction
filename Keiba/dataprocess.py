@@ -69,67 +69,41 @@ class KeibaProcessing:
         :return: 騎手まとめデータ
         """
         df = data
-        table_jockey = pd.pivot_table(df, index='jocky', columns='place',
-                                      values='result', aggfunc='count', dropna=False)
-        table_jockey = table_jockey.fillna(0)
 
         df.loc[df['result'] >= 3, 'result'] = 0
         df.loc[df['result'] == 2, 'result'] = 1
 
-        table_jockey1 = pd.pivot_table(df, index='jocky', columns='place',
-                                       values='result', aggfunc='sum', dropna=False)
-        table_jockey1 = table_jockey1.fillna(0)
+        table_jockey = pd.pivot_table(df, index='jocky', columns='place', values='result', aggfunc='mean', dropna=False)
+        table_jockey = table_jockey.fillna(0)
 
-        for place in table_jockey.columns:
-            for jockey in table_jockey.index:
-                table_jockey1[place][jockey] = table_jockey1[place][jockey] / table_jockey[place][jockey]
-        table_jockey1 = table_jockey1.fillna(0)
+        table_jockey = pd.DataFrame(table_jockey)
+        table_jockey = table_jockey.round(4)
+        table_jockey = table_jockey.add_prefix('jockey_')
 
-        table_jockey1 = pd.DataFrame(table_jockey1)
-        table_jockey1 = table_jockey1.round(4)
-        table_jockey1 = table_jockey1.add_prefix('jockey_')
-
-        return table_jockey1
+        return table_jockey
 
     @staticmethod
     def father_data_process(data, index='father'):
         df = data
         # fatherの連結対象(レース場成績、距離、芝ダート、重馬場成績)
 
-        table_father_place = pd.pivot_table(df, index=index, columns='place', values='result', aggfunc='count',
+        df.loc[df['result'] >= 3, 'result'] = 0
+        df.loc[df['result'] == 2, 'result'] = 1
+
+        table_father_place = pd.pivot_table(df, index=index, columns='place', values='result', aggfunc='mean',
                                             dropna=False)
-        table_father_distance = pd.pivot_table(df, index=index, columns='distance', values='result', aggfunc='count',
+        table_father_distance = pd.pivot_table(df, index=index, columns='distance', values='result', aggfunc='mean',
                                                dropna=False)
-        table_father_turf = pd.pivot_table(df, index=index, columns='turf', values='result', aggfunc='count',
+        table_father_turf = pd.pivot_table(df, index=index, columns='turf', values='result', aggfunc='mean',
                                            dropna=False)
-        table_father_condition = pd.pivot_table(df, index=index, columns='condition', values='result', aggfunc='count',
+        table_father_condition = pd.pivot_table(df, index=index, columns='condition', values='result', aggfunc='mean',
                                                 dropna=False)
 
         table_father = pd.merge(table_father_place, table_father_distance, on=index, how='left')
         table_father = pd.merge(table_father, table_father_turf, on=index, how='left')
         table_father = pd.merge(table_father, table_father_condition, on=index, how='left')
 
-        df.loc[df['result'] >= 3, 'result'] = 0
-        df.loc[df['result'] == 2, 'result'] = 1
-
-        table_father_place_sum = pd.pivot_table(df, index=index, columns='place', values='result', aggfunc='sum',
-                                                dropna=False)
-        table_father_distance_sum = pd.pivot_table(df, index=index, columns='distance', values='result', aggfunc='sum',
-                                                   dropna=False)
-        table_father_turf_sum = pd.pivot_table(df, index=index, columns='turf', values='result', aggfunc='sum',
-                                               dropna=False)
-        table_father_condition_sum = pd.pivot_table(df, index=index, columns='condition', values='result',
-                                                    aggfunc='sum', dropna=False)
-
-        table_father1 = pd.merge(table_father_place_sum, table_father_distance_sum, on=index, how='left')
-        table_father1 = pd.merge(table_father1, table_father_turf_sum, on=index, how='left')
-        table_father1 = pd.merge(table_father1, table_father_condition_sum, on=index, how='left')
-
-        for place in table_father.columns:
-            for father in table_father.index:
-                table_father1[place][father] = table_father1[place][father] / table_father[place][father]
-
-        table_father1 = table_father1.fillna(0)
+        table_father1 = table_father.fillna(0)
 
         df['legtype'] = df['legtype'].map({'逃げ': 0, '先行': 1, '差し': 2, '追込': 3, '自在': 4})
         legtypes = df.groupby(index).legtype.apply(lambda x: x.mode()).reset_index()

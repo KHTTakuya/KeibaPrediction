@@ -15,6 +15,7 @@ class KeibaPrediction:
     def gbm_params_keiba(self):
         df = self.data
 
+
         df['days'] = pd.to_datetime(df['days'])
 
         df_pred = df[df['days'] > datetime(2021, 10, 16)]
