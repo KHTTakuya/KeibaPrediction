@@ -2,12 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="89784895-80d5-4e90-acc0-a74e827d2842" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Keiba/dataprocess.py" beforeDir="false" afterPath="$PROJECT_DIR$/Keiba/dataprocess.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Keiba/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/Keiba/models.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/setup.py" beforeDir="false" afterPath="$PROJECT_DIR$/setup.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -92,7 +87,7 @@
       <workItem from="1634368587713" duration="762000" />
       <workItem from="1634369357947" duration="11418000" />
       <workItem from="1634543229577" duration="7867000" />
-      <workItem from="1634613697752" duration="5836000" />
+      <workItem from="1634613697752" duration="6306000" />
     </task>
     <servers />
   </component>
