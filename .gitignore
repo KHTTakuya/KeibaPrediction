@@ -2,4 +2,4 @@
 *.csv
 
 # .ideaファイルを無視
-/.idea
+.idea/
