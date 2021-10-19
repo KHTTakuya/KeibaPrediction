@@ -1,5 +1,10 @@
-# すべての.csvファイルを無視
-*.csv
+# .csvファイルを無視
+Keiba/datafile/*.csv
+Keiba/datafile/pred_data/*.csv
 
 # .ideaファイルを無視
 .idea/
+
+# .__pycache__ファイルを無視
+Keiba/__pycache__/
+
