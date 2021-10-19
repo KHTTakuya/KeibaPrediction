@@ -1,3 +1,8 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
 # .csvファイルを無視
 Keiba/datafile/*.csv
 Keiba/datafile/pred_data/*.csv
