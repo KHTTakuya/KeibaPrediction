@@ -15,13 +15,12 @@ class KeibaPrediction:
     def gbm_params_keiba(self):
         df = self.data
 
-
         df['days'] = pd.to_datetime(df['days'])
 
-        df_pred = df[df['days'] > datetime(2021, 10, 16)]
+        df_pred = df[df['days'] >= datetime(2021, 10, 16)]
         df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
 
-        df = df[df['days'] <= datetime(2021, 10, 16)]
+        df = df[df['days'] < datetime(2021, 10, 16)]
         df = df.dropna(how='any')
         train_x = df.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
         train_y = df['flag']

@@ -11,5 +11,4 @@ Keiba/datafile/pred_data/*.csv
 .idea/
 
 # .__pycache__ファイルを無視
-Keiba/__pycache__
-
+Keiba/__pycache__/

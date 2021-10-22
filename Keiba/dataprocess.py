@@ -224,13 +224,17 @@ class KeibaProcessing:
                     'fathermon', 'legtype', 'jocky', 'trainer', 'father_legtype']
 
         # 　特徴量生成
-        df['odds_hi'] = (df['odds'] // df['pop'])
-        df['re_odds_hi'] = (df['pre_odds'] // df['pre_pop'])
-        df['re_3_to_4time'] = (df['pre_rank3'] - df['pre_rank4'])
+        df['odds_hi'] = (df['odds'] / df['pop'])
+        df['re_odds_hi'] = (df['pre_odds'] / df['pre_pop'])
+        df['odds_hi*2'] = df['odds_hi'] ** 2
+        df['re_odds_hi*2'] = df['re_odds_hi'] ** 2
+        df['re_3_to_4time'] = (df['pre_rank4'] - df['pre_rank3'])
+        df['re_3_to_4time_hi*2'] = (df['pre_rank4'] / df['pre_rank3']) ** 2
         df['father_3f_to_my'] = (df['father_3ftime'] - df['pre_3ftime'])
         df['fathertype_3f_to_my'] = (df['fathertype_3ftime'] - df['pre_3ftime'])
         df['re_pop_now_pop'] = (df['pre_pop'] - df['pop'])
         df['re_odds_now_odds'] = (df['pre_odds'] - df['odds'])
+        df['re_result_to_pop'] = (df['pre_result'] - df['pre_pop'])
 
         for c in cat_cols:
             le = LabelEncoder()
