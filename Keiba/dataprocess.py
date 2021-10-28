@@ -1,7 +1,12 @@
+import numpy as np
 import pandas as pd
+import tensorflow as tf
 
 from sklearn.preprocessing import LabelEncoder
+from tensorflow import feature_column
+from sklearn.preprocessing import StandardScaler
 
+from Keiba import datalist
 
 class KeibaProcessing:
 
@@ -14,16 +19,15 @@ class KeibaProcessing:
         self.csv_data = csv_data
         self.pred_data = pred_data
 
-    def create_df(self):
+    def create_dataframe(self):
         """
         :return: df
+        create_dataframeからlightGBMに行く場合は、data_feature_and_formating関数を実行してから起動すること。
+        また、Tensorflowに行く場合は、df_to_tflayerとdata_feature_and_formatingをFalseにしてから実行すること。
         """
         df_data = self.preprocessing(self.csv_data)
-        if self.pred_data is not None:
-            pred_df = self.preprocessing(self.pred_data)
-            main = self.pre_horse_data_process(df_data, pred_data=pred_df)
-        else:
-            main = self.pre_horse_data_process(df_data, pred_data=self.pred_data)
+
+        main = self.pre_horse_data_process(df_data, pred_data=self.pred_data)
         jockey = self.jockey_data_process(df_data)
         father = self.father_data_process(df_data)
         father_type = self.father_data_process(df_data, index='fathertype')
@@ -31,7 +35,6 @@ class KeibaProcessing:
         distance = self.place_data_process(df_data, index='distance')
 
         df = self.data_concatenation(main, jockey, father, father_type, place, distance)
-        df = self.data_feature_and_formating(df)
 
         return df
 
@@ -210,7 +213,7 @@ class KeibaProcessing:
         return df
 
     @staticmethod
-    def data_feature_and_formating(processed_data):
+    def data_feature_and_formating(processed_data, gbmflag=True):
         df = processed_data
 
         d_ranking = lambda x: 1 if x in [1, 2] else 0
@@ -220,8 +223,7 @@ class KeibaProcessing:
         df = df.drop(drop_list, axis=1)
 
         cat_cols = ['place', 'class', 'turf', 'distance', 'weather', 'condition', 'sex', 'father', 'mother',
-                    'fathertype',
-                    'fathermon', 'legtype', 'jocky', 'trainer', 'father_legtype']
+                    'fathertype', 'fathermon', 'legtype', 'jocky', 'trainer', 'father_legtype']
 
         # 　特徴量生成
         df['odds_hi'] = (df['odds'] / df['pop'])
@@ -236,9 +238,69 @@ class KeibaProcessing:
         df['re_odds_now_odds'] = (df['pre_odds'] - df['odds'])
         df['re_result_to_pop'] = (df['pre_result'] - df['pre_pop'])
 
-        for c in cat_cols:
-            le = LabelEncoder()
-            le.fit(df[c])
-            df[c] = le.transform(df[c])
+        feature_list = ['odds_hi', 're_odds_hi', 'odds_hi*2', 're_odds_hi*2', 're_3_to_4time', 're_3_to_4time_hi*2',
+                        'father_3f_to_my', 'fathertype_3f_to_my', 're_pop_now_pop', 're_odds_now_odds',
+                        're_result_to_pop']
+
+        for feature in feature_list:
+            df[feature] = df[feature].replace([np.inf, -np.inf], np.nan)
+            df[feature] = df[feature].fillna(0)
+
+        if gbmflag:
+            for c in cat_cols:
+                le = LabelEncoder()
+                le.fit(df[c])
+                df[c] = le.transform(df[c])
+        else:
+            previous_list = datalist.re_rename_list
+            after_list = datalist.rename_list
+            for i in range(len(previous_list)):
+                df = df.rename(columns={previous_list[i]: after_list[i]})
+
+            num_data = datalist.num_datas
+            num_data.remove('horsenum')
+
+            scaler = StandardScaler()
+            sc = scaler.fit(df[num_data])
+
+            scalered_df = pd.DataFrame(sc.transform(df[num_data]), columns=num_data, index=df.index)
+            df.update(scalered_df)
 
         return df
+
+    @staticmethod
+    def df_to_dataset(dataframe, shuffle=True, batch_size=32):
+        dataframe = dataframe.copy()
+        labels = dataframe.pop('flag')
+        ds = tf.data.Dataset.from_tensor_slices((dict(dataframe), labels))
+        if shuffle:
+            ds = ds.shuffle(buffer_size=len(dataframe))
+        ds = ds.batch(batch_size)
+        return ds
+
+    @staticmethod
+    def df_to_tfdata(df_data):
+        df = df_data
+
+        feature_columns = []
+
+        num_data = datalist.num_datas
+
+        for header in num_data:
+            feature_columns.append(feature_column.numeric_column(header))
+
+        horsenum = feature_column.numeric_column('horsenum')
+        horsenum_buckets = feature_column.bucketized_column(horsenum, [2, 4, 6, 8, 10, 12, 14, 16, 18])
+        feature_columns.append(horsenum_buckets)
+
+        cat_data = ['place', 'class', 'turf', 'weather', 'condition', 'sex', 'father', 'mother', 'fathermon',
+                    'fathertype', 'legtype', 'jocky', 'trainer']
+
+        for cat in cat_data:
+            category = feature_column.categorical_column_with_vocabulary_list(cat, list(df[cat].unique()))
+            feature_columns.append(feature_column.embedding_column(category, dimension=8))
+
+        feature_layer = tf.keras.layers.DenseFeatures(feature_columns)
+
+        return feature_layer
+

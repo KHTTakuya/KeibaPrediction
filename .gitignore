@@ -12,3 +12,6 @@ Keiba/datafile/pred_data/*.csv
 
 # .__pycache__ファイルを無視
 Keiba/__pycache__/
+
+# myenvファイルを無視
+venv/
