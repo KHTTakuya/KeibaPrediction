@@ -6,7 +6,7 @@ from Keiba.models import KeibaPrediction
 
 
 def create_keiba_prediction(csv_data):
-    # 　csvデータをmodelに読み込ませるように基礎加工する。
+    # csvデータをmodelに読み込ませるように基礎加工する。
     set_data = KeibaProcessing(csv_data)
     df = set_data.create_dataframe()
 
