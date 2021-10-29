@@ -14,16 +14,17 @@ class KeibaProcessing:
         """
         :param csv_data:
         このクラスに競馬の前処理方法を記載すること、継ぎ足しする場合は
-        "create_df"に実行関数を記載する。
+        "create_dataframe"に実行関数を記載する。
         """
         self.csv_data = csv_data
         self.pred_data = pred_data
 
     def create_dataframe(self):
         """
-        :return: df
+        :return: df(pandas:dataframe)
         create_dataframeからlightGBMに行く場合は、data_feature_and_formating関数を実行してから起動すること。
         また、Tensorflowに行く場合は、df_to_tflayerとdata_feature_and_formatingをFalseにしてから実行すること。
+        なお原則、データ加工を行う際はデバック作業、新規実装を除いてこちらの関数のみを利用すること。
         """
         df_data = self.preprocessing(self.csv_data)
 
@@ -42,7 +43,8 @@ class KeibaProcessing:
     def preprocessing(data):
         """
         :param data: csvデータ
-        :return: 最低条件のデータ削除
+        :return: df(pandas:dataframe)
+        基礎条件のデータ削除
         """
         df = pd.read_csv(data, encoding="shift-jis")
         # 障害レースを削除する。
@@ -69,7 +71,8 @@ class KeibaProcessing:
     def jockey_data_process(data):
         """
         :param data: preprocessingから受け取る。
-        :return: 騎手まとめデータ
+        :return: df(pandas:dataframe)
+        騎手のdataframeを作成する。
         """
         df = data
 
@@ -87,6 +90,13 @@ class KeibaProcessing:
 
     @staticmethod
     def father_data_process(data, index='father'):
+        """
+        :param data: df(preprocessingを通して)いれること。csvデータのまま入れるとエラーがおきる。
+        :param index: 初期はfather,fathertypeで作成する場合はfathertypeに変更すること。
+        :return: df(dataframe)
+        indexにはfatherとfathertypeのみが対象。その他を入れるのは予期せぬエラーが起きる可能があるため入れないこと。
+        placeとdistanceで作成する場合は、place_data_processで作成すること。
+        """
         df = data
         # fatherの連結対象(レース場成績、距離、芝ダート、重馬場成績)
 
@@ -128,6 +138,13 @@ class KeibaProcessing:
 
     @staticmethod
     def place_data_process(data, index='place'):
+        """
+        :param data: df(preprocessingを通して)いれること。csvデータのまま入れるとエラーがおきる。
+        :param index: 初期はplace,distanceで作成する場合はdistanceに変更すること。
+        :return: df(pandas:dataframe)
+        indexにはplaceとdistanceのみが対象。その他を入れるのは予期せぬエラーが起きる可能があるため入れないこと。
+        fatherとfathertypeで作成したい場合は、father_data_processで作成すること。
+        """
         global table_place_time
         df = data
 
@@ -166,6 +183,13 @@ class KeibaProcessing:
 
     @staticmethod
     def pre_horse_data_process(data, pred_data=None):
+        """
+        :param data: df(preprocessingを通して)いれること。csvデータのまま入れるとエラーがおきる。
+        :param pred_data: 原則Noneにすること(こちらは後日修正を行う。)
+        :return: df(pandas:dataframe)
+        前走の出走データを作成する。これが基本のデータになる。
+        pd.mergeする際はこのデータを中心にmergeするようにお願いします。
+        """
         if pred_data is not None:
             df = pd.concat(data, pred_data)
         else:
@@ -197,6 +221,16 @@ class KeibaProcessing:
 
     @staticmethod
     def data_concatenation(main, jockey, father, father_type, place, distance):
+        """
+        :param main: df(pandas:dataframe) pre_horse_data_processで作成したデータ。
+        :param jockey: df(pandas:dataframe) preprocessingで作成したデータ。
+        :param father: df(pandas:dataframe) father_data_processで作成したデータ。
+        :param father_type: df(pandas:dataframe) father_data_processで作成したデータ。(index='fathertype')
+        :param place: df(pandas:dataframe) place_data_processで作成したデータ。
+        :param distance: df(pandas:dataframe) place_data_processで作成したデータ。(index='distance')
+        :return: df(pandas:dataframe)
+        以下paramsを連結させる。
+        """
         df = main
 
         father = father.rename(columns={'father_father': 'father'})
@@ -214,6 +248,12 @@ class KeibaProcessing:
 
     @staticmethod
     def data_feature_and_formating(processed_data, gbmflag=True):
+        """
+        :param processed_data: df(pandas:dataframe)data_concatenationから持ってくること。
+        :param gbmflag: True(default)の場合はLightGBM用にデータが加工される。
+        Falseの場合はtensorflow,logisticsようにデータが加工される。
+        :return: df(pandas:dataframe)
+        """
         df = processed_data
 
         d_ranking = lambda x: 1 if x in [1, 2] else 0
@@ -269,17 +309,12 @@ class KeibaProcessing:
         return df
 
     @staticmethod
-    def df_to_dataset(dataframe, shuffle=True, batch_size=32):
-        dataframe = dataframe.copy()
-        labels = dataframe.pop('flag')
-        ds = tf.data.Dataset.from_tensor_slices((dict(dataframe), labels))
-        if shuffle:
-            ds = ds.shuffle(buffer_size=len(dataframe))
-        ds = ds.batch(batch_size)
-        return ds
-
-    @staticmethod
     def df_to_tfdata(df_data):
+        """
+        :param df_data: df(pandas:dataframe)data_feature_and_formatingから持ってくること。
+        :return: featuer_layer(tensorflow用)
+        tensorflow用に特徴量のデータ加工を行う。
+        """
         df = df_data
 
         feature_columns = []
@@ -303,4 +338,3 @@ class KeibaProcessing:
         feature_layer = tf.keras.layers.DenseFeatures(feature_columns)
 
         return feature_layer
-

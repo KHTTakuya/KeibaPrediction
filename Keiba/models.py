@@ -7,7 +7,7 @@ import tensorflow as tf
 from tensorflow.keras import layers
 from sklearn.linear_model import LogisticRegression
 
-from sklearn.model_selection import KFold, train_test_split
+from sklearn.model_selection import train_test_split
 
 """
 task:
@@ -18,9 +18,18 @@ datetimeの変数化をすすめる。__init__に記載する。
 class KeibaPrediction:
 
     def __init__(self, data):
+        """
+        :param data: df(pandas:dataframe)
+        モデルに導入する用のdataframeを引数にいれること。特にLightGBMとtensorflowは違うdataframeを使用するため注意されたし
+        """
         self.data = data
 
     def gbm_params_keiba(self):
+        """
+        :return: df(pandas:dataframe)
+        2着以内の確率が返ってくる。
+        raceid, prediction(確率)が記載された状態。
+        """
         df = self.data
 
         df['days'] = pd.to_datetime(df['days'])
@@ -77,6 +86,14 @@ class KeibaPrediction:
 
     @staticmethod
     def df_to_dataset(dataframe, shuffle=True, batch_size=32):
+        """
+        :param dataframe:
+        :param shuffle:
+        :param batch_size:
+        :return: ds
+        原則、クラス内呼び出しのみ。
+        外部からの呼び出しは不可。(デバックをする場合は除く)
+        """
         dataframe = dataframe.copy()
         labels = dataframe.pop('flag')
         ds = tf.data.Dataset.from_tensor_slices((dict(dataframe), labels))
@@ -86,6 +103,13 @@ class KeibaPrediction:
         return ds
 
     def tensorflow_models(self, feature_layer):
+        """
+
+        :param feature_layer: df_to_tfdataからの返り値をいれる。
+        :return: df(pandas:dataframe)
+        2着以内の確率が返ってくる。
+        raceid, prediction(確率)が記載された状態。
+        """
         df = self.data
 
         df['days'] = pd.to_datetime(df['days'])
@@ -124,7 +148,7 @@ class KeibaPrediction:
                   validation_data=val_ds,
                   epochs=5)
 
-        loss, accuracy = model.evaluate(test_ds)
+        # loss, accuracy = model.evaluate(test_ds)
 
         predictions = model.predict(pred_ds)
         predict = [i for i in predictions]
@@ -139,6 +163,11 @@ class KeibaPrediction:
         return predict
 
     def logistic_model(self):
+        """
+        :return: df(pandas:dataframe)
+        2着以内の確率が返ってくる。
+        raceid, prediction(確率)が記載された状態。
+        """
         df = self.data
 
         df['days'] = pd.to_datetime(df['days'])
@@ -175,6 +204,14 @@ class KeibaPrediction:
         return predict
 
     def model_concatenation(self, gbm_model=None, tf_model=None, logi_model=None):
+        """
+        :param gbm_model:　df(pandas:dataframe) gbm_params_keibaから持ってくる。
+        :param tf_model:　df(pandas:dataframe) tensorflow_modelsから持ってくる。
+        :param logi_model:　df(pandas:dataframe) logistic_modelから持ってくる。
+        :return: df(pandas:dataframe)
+        予想印やフラグの作成。
+        なるべくdf.to_csvでcsvデータとして返すのがよろし
+        """
 
         main_df = self.data
         main_df['days'] = pd.to_datetime(main_df['days'])
@@ -187,9 +224,11 @@ class KeibaPrediction:
 
         df = df.dropna(how='any')
 
+        # ここは何故かエラーが起きているので一時的に止めている。もし"[]"がついている場合はコメントアウトを外して実行すること。
         # for i in range(len(df['tf_pred'])):
         #     df['tf_pred'][i] = df['tf_pred'][i].replace('[', '')
         #     df['tf_pred'][i] = df['tf_pred'][i].replace(']', '')
+
         df['gbm_pred'] = df['gbm_pred'].astype(float)
         df['tf_pred'] = df['tf_pred'].astype(float)
         df['logi_pred'] = df['logi_pred'].astype(float)
