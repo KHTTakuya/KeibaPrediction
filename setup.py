@@ -1,3 +1,4 @@
+import pandas as pd
 import time
 import warnings
 
@@ -5,10 +6,15 @@ from Keiba.dataprocess import KeibaProcessing
 from Keiba.models import KeibaPrediction
 
 
-def create_keiba_prediction(csv_data):
+def create_keiba_prediction(csv_data, df_flag=True):
     # csvデータをmodelに読み込ませるように基礎加工する。
-    set_data = KeibaProcessing(csv_data)
-    df = set_data.create_dataframe()
+    if df_flag:
+        set_data = KeibaProcessing(csv_data)
+        df = set_data.create_dataframe()
+        df.to_csv('Keiba/datafile/pred_data/csvdataframe.csv', encoding='utf_8_sig', index=False)
+    else:
+        set_data = KeibaProcessing(csv_data)
+        df = pd.read_csv('Keiba/datafile/pred_data/csvdataframe.csv')
 
     # dfデータをLightGBM,tensorflow・logistics用に加工する
     df_gbm = set_data.data_feature_and_formating(df)
@@ -34,12 +40,12 @@ def create_keiba_prediction(csv_data):
 
 if __name__ == '__main__':
     warnings.simplefilter('ignore')
-
+    # 2013年～収集開始日
     main_data = 'Keiba/datafile/main.csv'
     # 処理開始
     start = time.time()
     # 処理内容
-    prediction = create_keiba_prediction(main_data)
+    prediction = create_keiba_prediction(main_data, df_flag=False)
     prediction.to_csv('main_ans.csv', encoding='utf_8_sig')
     # 処理終了
     process_time = time.time() - start
