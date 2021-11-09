@@ -5,7 +5,6 @@ import pandas as pd
 
 import tensorflow as tf
 from tensorflow.keras import layers
-from sklearn.linear_model import LogisticRegression
 
 from sklearn.model_selection import train_test_split
 
@@ -137,6 +136,7 @@ class KeibaPrediction:
             layers.Dense(128, activation='relu'),
             layers.Dense(128, activation='relu'),
             layers.Dense(128, activation='relu'),
+            layers.Dense(64, activation='relu'),
             layers.Dense(1, activation='sigmoid')
         ])
 
@@ -162,52 +162,10 @@ class KeibaPrediction:
 
         return predict
 
-    def logistic_model(self):
-        """
-        :return: df(pandas:dataframe)
-        2着以内の確率が返ってくる。
-        raceid, prediction(確率)が記載された状態。
-        """
-        df = self.data
-
-        df['days'] = pd.to_datetime(df['days'])
-        df = df.dropna(how='any')
-
-        drop_cat_cols = ['father', 'mother', 'fathermon', 'fathertype', 'legtype', 'jocky', 'trainer', 'father_legtype']
-        dummies_cols = ['place', 'class', 'turf', 'weather', 'distance', 'condition', 'sex']
-
-        df_droped = df.drop(drop_cat_cols, axis=1)
-        df_droped = pd.get_dummies(df_droped, drop_first=True, columns=dummies_cols)
-
-        df_pred = df_droped[df_droped['days'] >= datetime(2021, 10, 24)]
-        df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'raceid'], axis=1)
-
-        df_droped = df_droped[df_droped['days'] < datetime(2021, 10, 24)]
-        train_x = df_droped.drop(['flag', 'days', 'horsename', 'raceid'], axis=1)
-        train_y = df_droped['flag']
-
-        X_train, X_test, y_train, y_test = train_test_split(train_x, train_y,
-                                                            stratify=train_y,
-                                                            random_state=0, test_size=0.3, shuffle=True)
-
-        logi_model = LogisticRegression(random_state=0, C=0.5, multi_class='auto', solver='lbfgs')
-        logi_model.fit(X_train, y_train)
-        predictions = logi_model.predict_proba(df_pred_droped)
-
-        predict_list = []
-        for i in range(len(predictions)):
-            predict_list.append(predictions[i][1])
-
-        predict = pd.DataFrame({"raceid": df_pred['raceid'],
-                                "logi_pred": predict_list})
-
-        return predict
-
-    def model_concatenation(self, gbm_model=None, tf_model=None, logi_model=None):
+    def model_concatenation(self, gbm_model=None, tf_model=None):
         """
         :param gbm_model:　df(pandas:dataframe) gbm_params_keibaから持ってくる。
         :param tf_model:　df(pandas:dataframe) tensorflow_modelsから持ってくる。
-        :param logi_model:　df(pandas:dataframe) logistic_modelから持ってくる。
         :return: df(pandas:dataframe)
         予想印やフラグの作成。
         なるべくdf.to_csvでcsvデータとして返すのがよろし
@@ -220,7 +178,6 @@ class KeibaPrediction:
         df_pred = main_df[main_df['days'] >= datetime(2021, 10, 24)]
 
         df = pd.merge(gbm_model, tf_model, on='raceid', how='left')
-        df = pd.merge(df, logi_model, on='raceid', how='left')
 
         df = df.dropna(how='any')
 
@@ -231,7 +188,6 @@ class KeibaPrediction:
 
         df['gbm_pred'] = df['gbm_pred'].astype(float)
         df['tf_pred'] = df['tf_pred'].astype(float)
-        df['logi_pred'] = df['logi_pred'].astype(float)
 
         """
         todo:
@@ -241,19 +197,13 @@ class KeibaPrediction:
         df['new_mark_flag'] = '×'
         df['new_flag'] = 0
 
-        # 0.5が1個以上のフラグ作成。△
-        df['new_mark_flag'].mask((df['gbm_pred'] >= 0.5) | (df['tf_pred'] >= 0.5) | (df['logi_pred'] >= 0.5), '△',
-                                 inplace=True)
         # # 0.5が2個以上のフラグ作成。〇
-        df['new_mark_flag'].mask((df['gbm_pred'] >= 0.5) & (df['tf_pred'] >= 0.5), '〇', inplace=True)
-        df['new_mark_flag'].mask((df['gbm_pred'] >= 0.5) & (df['logi_pred'] >= 0.5), '〇', inplace=True)
-        df['new_mark_flag'].mask((df['logi_pred'] >= 0.5) & (df['tf_pred'] >= 0.5), '〇', inplace=True)
-        # 0.5が3個以上のフラグ作成。◎
-        df['new_mark_flag'].mask((df['gbm_pred'] >= 0.5) & (df['tf_pred'] >= 0.5) & (df['logi_pred'] >= 0.5), '◎',
-                                 inplace=True)
+        df['new_mark_flag'].mask((df['gbm_pred'] >= 0.5) | (df['tf_pred'] >= 0.5), '〇', inplace=True)
 
-        df['new_flag'].mask(((df['gbm_pred'] * 0.3) + (df['tf_pred'] * 0.6) + (df['logi_pred'] * 0.1)) >= 0.5, 1,
-                            inplace=True)
+        # 0.5が3個以上のフラグ作成。◎
+        df['new_mark_flag'].mask((df['gbm_pred'] >= 0.5) & (df['tf_pred'] >= 0.5), '◎', inplace=True)
+
+        df['new_flag'].mask(((df['gbm_pred'] * 0.5) + (df['tf_pred'] * 0.5)) >= 0.5, 1, inplace=True)
 
         df = pd.merge(df_pred, df, on='raceid', how='left')
 

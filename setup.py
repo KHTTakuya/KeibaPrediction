@@ -5,6 +5,14 @@ import warnings
 from Keiba.dataprocess import KeibaProcessing
 from Keiba.models import KeibaPrediction
 
+"""
+Memo:
+numpy配列を加工すると処理が急激に重くなるので(16GB一杯になる)、解決できるまでは主成分分析・クラスター分析
+などといったreturnがnumpy配列を返す分析手法であるものは使用不可とする。解決が出来次第処理に追加する。
+※現状出ている解決策
+・メモリを増やす。
+・AWSなどを利用する。
+"""
 
 def create_keiba_prediction(csv_data, df_flag=True):
     # csvデータをmodelに読み込ませるように基礎加工する。
@@ -30,10 +38,9 @@ def create_keiba_prediction(csv_data, df_flag=True):
     # モデルを使って予測する。
     gbm = pred_gbm.gbm_params_keiba()
     tenflow = pred.tensorflow_models(df_layer)
-    log = pred.logistic_model()
 
     # 予想したものを組み合わせて出力する。
-    df = pred.model_concatenation(gbm, tenflow, log)
+    df = pred.model_concatenation(gbm, tenflow)
 
     return df
 
