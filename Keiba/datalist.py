@@ -1,5 +1,5 @@
 # numdatas：数字のカラムを認識する用。l'father_cfy','fathertype_cfy',
-num_datas = ['horsenum', 'pre_pop', 'pre_odds', 'pre_rank3', 'pre_rank4', 'pre_3ftime', 'pre_result', 'jockey_tyukyou',
+num_datas = ['horsenum', 'pre_pop', 'pre_odds', 'pre_rank3', 'pre_rank4', 'pre_3ftime', 'pre_result', 'speedindex', 'jockey_tyukyou',
              'jockey_nakayama', 'jockey_kyoto', 'jockey_hakodate', 'jockey_kokura', 'jockey_niigata', 'jockey_sapporo',
              'jockey_tokyo', 'jockey_fukushima', 'jockey_hannshin', 'father_tyukyou', 'father_nakayama', 'father_kyoto',
              'father_hakodate', 'father_kokura', 'father_niigata', 'father_sapporo', 'father_tokyo', 'father_fukushima',

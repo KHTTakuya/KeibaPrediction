@@ -46,14 +46,19 @@ def create_keiba_prediction(csv_data, df_flag=True):
 
 
 if __name__ == '__main__':
+    ###############################
+    # メモ
+    # 11.13予想の的中(1着,2着のみ)
+    #
+    ###############################
     warnings.simplefilter('ignore')
     # 2013年～収集開始日
     main_data = 'Keiba/datafile/main.csv'
     # 処理開始
     start = time.time()
     # 処理内容
-    prediction = create_keiba_prediction(main_data, df_flag=False)
-    prediction.to_csv('main_ans.csv', encoding='utf_8_sig')
+    prediction = create_keiba_prediction(main_data)
+    prediction.to_csv('main_ans.csv1', encoding='utf_8_sig')
     # 処理終了
     process_time = time.time() - start
     print('実行時間は：{} でした。'.format(process_time))  # 実行時間は：3098.3596515655518 でした。

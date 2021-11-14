@@ -53,6 +53,26 @@ class KeibaProcessing:
 
         df01 = df[df['distance'].isin(race_dis)]
 
+        # スピード指数の作成
+        df01['conditionindex'] = 0
+
+        df01['conditionindex'].mask((df01['condition'] == '良') & (df01['turf'] == '芝'), -25, inplace=True)
+        df01['conditionindex'].mask((df01['condition'] == '稍') & (df01['turf'] == '芝'), -15, inplace=True)
+        df01['conditionindex'].mask((df01['condition'] == '重') & (df01['turf'] == '芝'), -5, inplace=True)
+        df01['conditionindex'].mask((df01['condition'] == '良') & (df01['turf'] == 'ダ'), -20, inplace=True)
+        df01['conditionindex'].mask((df01['condition'] == '稍') & (df01['turf'] == 'ダ'), -10, inplace=True)
+
+        df['basetime'].fillna(df['basetime'].median())
+        df['weight'].fillna(df['weight'].median())
+
+        time = (df01['basetime'] * 10) - (df01['time'] * 10)
+        disindex = 1 / (df01['basetime'] * 10) * 1000
+        weight = (df01['weight'] - 55) * 2
+
+        df01['speedindex'] = time * disindex + df01['conditionindex'] + weight + 80
+
+        df01 = df01.drop(['basetime', 'weight', 'conditionindex'], axis=1)
+
         # 脚質の調整
 
         df01 = df01.replace({'legtype': {'ﾏｸﾘ': '追込'}})
@@ -199,14 +219,16 @@ class KeibaProcessing:
 
         df['days'] = pd.to_datetime(df['days'])
         name_days_df = df[["horsename", "days", "pop",
-                           "odds", "rank3", "rank4", "3ftime", "result"]].sort_values(['horsename', 'days'])
+                           "odds", "rank3", "rank4", "3ftime", "result", 'speedindex']].sort_values(['horsename', 'days'])
 
         name_list = name_days_df['horsename'].unique()
+
         df_list = []
+        df = df.drop('speedindex', axis=1)
 
         for name in name_list:
             name_df = name_days_df[name_days_df['horsename'] == name]
-            shift_name_df = name_df[["pop", "odds", "rank3", "rank4", "3ftime", "result"]].shift(1)
+            shift_name_df = name_df[["pop", "odds", "rank3", "rank4", "3ftime", "result", 'speedindex']].shift(1)
             shift_name_df['horsename'] = name
             df_list.append(shift_name_df)
 
@@ -217,6 +239,7 @@ class KeibaProcessing:
                                               'rank4': 'pre_rank4', '3ftime': 'pre_3ftime', 'result': 'pre_result'})
 
         df = pd.merge(df, df_before, on=['horsename', 'days'], how='inner')
+        
         return df
 
     @staticmethod
@@ -299,6 +322,7 @@ class KeibaProcessing:
 
             num_data = datalist.num_datas
             num_data.remove('horsenum')
+            num_data.remove('speedindex')
 
             scaler = StandardScaler()
             sc = scaler.fit(df[num_data])

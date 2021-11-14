@@ -34,10 +34,10 @@ class KeibaPrediction:
         df['days'] = pd.to_datetime(df['days'])
         df = df.dropna(how='any')
 
-        df_pred = df[df['days'] >= datetime(2021, 10, 24)]
+        df_pred = df[df['days'] >= datetime(2021, 11, 12)]
         df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
 
-        df = df[df['days'] < datetime(2021, 10, 24)]
+        df = df[df['days'] < datetime(2021, 11, 12)]
 
         train_x = df.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
         train_y = df['flag']
@@ -114,10 +114,10 @@ class KeibaPrediction:
         df['days'] = pd.to_datetime(df['days'])
         df = df.dropna(how='any')
 
-        df_pred = df[df['days'] >= datetime(2021, 10, 24)]
+        df_pred = df[df['days'] >= datetime(2021, 11, 12)]
         df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
 
-        df = df[df['days'] < datetime(2021, 10, 24)]
+        df = df[df['days'] < datetime(2021, 11, 12)]
         df = df.drop(['days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
 
         train, test = train_test_split(df, test_size=0.2)
@@ -175,7 +175,7 @@ class KeibaPrediction:
         main_df['days'] = pd.to_datetime(main_df['days'])
         main_df = main_df.dropna(how='any')
 
-        df_pred = main_df[main_df['days'] >= datetime(2021, 10, 24)]
+        df_pred = main_df[main_df['days'] >= datetime(2021, 11, 12)]
 
         df = pd.merge(gbm_model, tf_model, on='raceid', how='left')
 
@@ -203,7 +203,7 @@ class KeibaPrediction:
         # 0.5が3個以上のフラグ作成。◎
         df['new_mark_flag'].mask((df['gbm_pred'] >= 0.5) & (df['tf_pred'] >= 0.5), '◎', inplace=True)
 
-        df['new_flag'].mask(((df['gbm_pred'] * 0.5) + (df['tf_pred'] * 0.5)) >= 0.5, 1, inplace=True)
+        df['new_flag'].mask(((df['gbm_pred'] * 0.45) + (df['tf_pred'] * 0.55)) >= 0.5, 1, inplace=True)
 
         df = pd.merge(df_pred, df, on='raceid', how='left')
 
