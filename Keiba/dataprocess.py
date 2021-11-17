@@ -8,6 +8,7 @@ from sklearn.preprocessing import StandardScaler
 
 from Keiba import datalist
 
+
 class KeibaProcessing:
 
     def __init__(self, csv_data, pred_data=None):
@@ -208,7 +209,7 @@ class KeibaProcessing:
         :param pred_data: 原則Noneにすること(こちらは後日修正を行う。)
         :return: df(pandas:dataframe)
         前走の出走データを作成する。これが基本のデータになる。
-        pd.mergeする際はこのデータを中心にmergeするようにお願いします。
+        pd.mergeする際はこのデータを中心にmergeすること。
         """
         if pred_data is not None:
             df = pd.concat(data, pred_data)
@@ -219,7 +220,8 @@ class KeibaProcessing:
 
         df['days'] = pd.to_datetime(df['days'])
         name_days_df = df[["horsename", "days", "pop",
-                           "odds", "rank3", "rank4", "3ftime", "result", 'speedindex']].sort_values(['horsename', 'days'])
+                           "odds", "rank3", "rank4", "3ftime", "result", 'speedindex']].sort_values(
+            ['horsename', 'days'])
 
         name_list = name_days_df['horsename'].unique()
 
@@ -239,7 +241,7 @@ class KeibaProcessing:
                                               'rank4': 'pre_rank4', '3ftime': 'pre_3ftime', 'result': 'pre_result'})
 
         df = pd.merge(df, df_before, on=['horsename', 'days'], how='inner')
-        
+
         return df
 
     @staticmethod
@@ -273,8 +275,8 @@ class KeibaProcessing:
     def data_feature_and_formating(processed_data, gbmflag=True):
         """
         :param processed_data: df(pandas:dataframe)data_concatenationから持ってくること。
-        :param gbmflag: True(default)の場合はLightGBM用にデータが加工される。
-        Falseの場合はtensorflow,logisticsようにデータが加工される。
+        :param gbmflag: True(default)の場合はLightGBM用にデータに加工される。
+        Falseの場合はtensorflow用データに加工される。
         :return: df(pandas:dataframe)
         """
         df = processed_data
