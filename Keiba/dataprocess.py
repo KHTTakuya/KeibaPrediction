@@ -54,7 +54,24 @@ class KeibaProcessing:
 
         df01 = df[df['distance'].isin(race_dis)]
 
+        # １部欠損値補完・除外
+        df01 = df01[~df01['result'].isin([0])]
+
+        df01 = df01.replace({"class": {"1勝": "500万", "2勝": "1000万", "3勝": "1600万"}})
+        df01 = df01.fillna({'fathertype': 'その他のエクリプス系'})
+
         # スピード指数の作成
+        df01 = df01.drop('basetime', axis=1)
+        df_basetime = df01.copy()
+
+        df_basetime = df_basetime[(df_basetime['result'] <= 3)]
+
+        base_time = df_basetime.groupby(['place', 'distance', 'turf']).mean()['time'].reset_index()
+        base_time = base_time.rename(columns={'time': 'basetime'})
+        base_time['basetime'] = base_time['basetime'].round(1)
+
+        df01 = pd.merge(df01, base_time, on=['place', 'turf', 'distance'], how='left')
+
         df01['conditionindex'] = 0
 
         df01['conditionindex'].mask((df01['condition'] == '良') & (df01['turf'] == '芝'), -25, inplace=True)
@@ -75,7 +92,6 @@ class KeibaProcessing:
         df01 = df01.drop(['basetime', 'weight', 'conditionindex'], axis=1)
 
         # 脚質の調整
-
         df01 = df01.replace({'legtype': {'ﾏｸﾘ': '追込'}})
         df01 = df01.replace({'legtype': {'後方': '追込'}})
         df01 = df01.replace({'legtype': {'中団': '差し'}})
@@ -85,6 +101,9 @@ class KeibaProcessing:
         df01 = df01.replace({'distance': [1600, 1700, 1800]}, 'マイル')
         df01 = df01.replace({'distance': [2000, 2200, 2300, 2400]}, '中距離')
         df01 = df01.replace({'distance': [2500, 2600, 3000, 3200, 3400, 3600]}, '長距離')
+
+        # 競争除外馬を削除する。
+        df01 = df01.dropna(subset=['pop', 'odds', '3ftime'])
 
         return df01
 
@@ -215,8 +234,6 @@ class KeibaProcessing:
             df = pd.concat(data, pred_data)
         else:
             df = data
-
-        df = df.dropna(how='any')
 
         df['days'] = pd.to_datetime(df['days'])
         name_days_df = df[["horsename", "days", "pop",

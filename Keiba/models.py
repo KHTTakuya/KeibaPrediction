@@ -5,6 +5,7 @@ import pandas as pd
 
 import tensorflow as tf
 from tensorflow.keras import layers
+from tensorflow import keras
 
 from sklearn.model_selection import train_test_split
 
@@ -34,10 +35,10 @@ class KeibaPrediction:
         df['days'] = pd.to_datetime(df['days'])
         df = df.dropna(how='any')
 
-        df_pred = df[df['days'] >= datetime(2021, 11, 12)]
+        df_pred = df[df['days'] >= datetime(2021, 11, 26)]
         df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
 
-        df = df[df['days'] < datetime(2021, 11, 12)]
+        df = df[df['days'] < datetime(2021, 11, 26)]
 
         train_x = df.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
         train_y = df['flag']
@@ -114,10 +115,10 @@ class KeibaPrediction:
         df['days'] = pd.to_datetime(df['days'])
         df = df.dropna(how='any')
 
-        df_pred = df[df['days'] >= datetime(2021, 11, 12)]
+        df_pred = df[df['days'] >= datetime(2021, 11, 26)]
         df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
 
-        df = df[df['days'] < datetime(2021, 11, 12)]
+        df = df[df['days'] < datetime(2021, 11, 26)]
         df = df.drop(['days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
 
         train, test = train_test_split(df, test_size=0.2)
@@ -133,9 +134,11 @@ class KeibaPrediction:
 
         model = tf.keras.Sequential([
             feature_layer,
-            layers.Dense(128, activation='relu'),
-            layers.Dense(128, activation='relu'),
-            layers.Dense(128, activation='relu'),
+            layers.Dense(128, activation='relu', kernel_regularizer=keras.regularizers.l2(0.001)),
+            tf.keras.layers.Dropout(0.1),
+            layers.Dense(128, activation='relu', kernel_regularizer=keras.regularizers.l2(0.001)),
+            tf.keras.layers.Dropout(0.1),
+            layers.Dense(128, activation='relu', kernel_regularizer=keras.regularizers.l2(0.001)),
             layers.Dense(64, activation='relu'),
             layers.Dense(1, activation='sigmoid')
         ])
@@ -175,7 +178,7 @@ class KeibaPrediction:
         main_df['days'] = pd.to_datetime(main_df['days'])
         main_df = main_df.dropna(how='any')
 
-        df_pred = main_df[main_df['days'] >= datetime(2021, 11, 12)]
+        df_pred = main_df[main_df['days'] >= datetime(2021, 11, 26)]
 
         df = pd.merge(gbm_model, tf_model, on='raceid', how='left')
 
