@@ -9,6 +9,7 @@ from sklearn.preprocessing import StandardScaler
 from Keiba.datafile import datalist
 
 
+
 class KeibaProcessing:
 
     def __init__(self, csv_data, pred_data=None):
@@ -228,7 +229,7 @@ class KeibaProcessing:
         :param pred_data: 原則Noneにすること(こちらは後日修正を行う。)
         :return: df(pandas:dataframe)
         前走の出走データを作成する。これが基本のデータになる。
-        pd.mergeする際はこのデータを中心にmergeするようにお願いします。
+        pd.mergeする際はこのデータを中心にmergeすること。
         """
         if pred_data is not None:
             df = pd.concat(data, pred_data)
@@ -316,8 +317,8 @@ class KeibaProcessing:
     def data_feature_and_formating(processed_data, gbmflag=True):
         """
         :param processed_data: df(pandas:dataframe)data_concatenationから持ってくること。
-        :param gbmflag: True(default)の場合はLightGBM用にデータが加工される。
-        Falseの場合はtensorflow,logisticsようにデータが加工される。
+        :param gbmflag: True(default)の場合はLightGBM用にデータに加工される。
+        Falseの場合はtensorflow用データに加工される。
         :return: df(pandas:dataframe)
         """
         df = processed_data

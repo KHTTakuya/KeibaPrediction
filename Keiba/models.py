@@ -42,10 +42,17 @@ class KeibaPrediction:
         df['days'] = pd.to_datetime(df['days'])
         df = df.dropna(how='any')
 
+<<<<<<< HEAD
         df_pred = df[df['days'] >= datetime(2021, 11, 20)]
         df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
 
         df = df[df['days'] < datetime(2021, 11, 20)]
+=======
+        df_pred = df[df['days'] >= datetime(2021, 11, 26)]
+        df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
+
+        df = df[df['days'] < datetime(2021, 11, 26)]
+>>>>>>> origin/master
 
         train_x = df.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
         train_y = df['flag']
@@ -128,12 +135,19 @@ class KeibaPrediction:
                      'trainer', 'father_legtype']
         df = df.dropna(how='any')
 
+<<<<<<< HEAD
         df = df.drop(drop_list, axis=1)
 
         df_pred = df[df['days'] >= datetime(2021, 11, 20)]
         df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
 
         df = df[df['days'] < datetime(2021, 11, 20)]
+=======
+        df_pred = df[df['days'] >= datetime(2021, 11, 26)]
+        df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
+
+        df = df[df['days'] < datetime(2021, 11, 26)]
+>>>>>>> origin/master
         df = df.drop(['days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
 
         train, test = train_test_split(df, test_size=0.2)
@@ -193,7 +207,11 @@ class KeibaPrediction:
         main_df['days'] = pd.to_datetime(main_df['days'])
         main_df = main_df.dropna(how='any')
 
+<<<<<<< HEAD
         df_pred = main_df[main_df['days'] >= datetime(2021, 11, 20)]
+=======
+        df_pred = main_df[main_df['days'] >= datetime(2021, 11, 26)]
+>>>>>>> origin/master
 
         df = pd.merge(gbm_model, tf_model, on='raceid', how='left')
 

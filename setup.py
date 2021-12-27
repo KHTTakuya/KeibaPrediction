@@ -17,6 +17,17 @@ numpy配列を加工すると処理が急激に重くなるので(16GB一杯に�
 
 
 def create_keiba_prediction(csv_data, df_flag=True):
+    """
+    :param csv_data: 「2013年～収集開始日」のデータを持ってくる。データの中身は以下記事を参照すること。
+    [https://kashiwapro.hatenablog.com/entry/2021/10/29/162155　](2021/11/17現在)
+    :param df_flag:　前処理終了時のデータをそのまま参照する場合はFalseにする。参照するパターンとしては、
+    オッズや人気に変化がなく前処理の時間を省略する場合。
+    :return:　dataframe(pandas)
+    dfで帰ってくるためdf.to_csvなどで出力すること。
+    参考：
+    df_flag=Trueにすると平均50分かかる(データの量にもよる)、Falseの場合平均30分かかる。
+    パソコンのスペック次第では時間がかかる場合もある。
+    """
     # csvデータをmodelに読み込ませるように基礎加工する。
     if df_flag:
         set_data = KeibaProcessing(csv_data)
@@ -51,19 +62,20 @@ def create_keiba_prediction(csv_data, df_flag=True):
 
 
 if __name__ == '__main__':
-    ###############################
-    # メモ
-    # 11.13予想の的中(1着,2着のみ)
-    #
-    ###############################
+
     warnings.simplefilter('ignore')
     # 2013年～収集開始日
     main_data = 'Keiba/datafile/main.csv'
     # 処理開始
     start = time.time()
     # 処理内容
+<<<<<<< HEAD
     prediction = create_keiba_prediction(main_data, df_flag=False)
     prediction.to_csv('main_ans00001.csv', encoding='utf_8_sig')
+=======
+    prediction = create_keiba_prediction(main_data)
+    prediction.to_csv('main_ans.csv', encoding='utf_8_sig')
+>>>>>>> origin/master
     # 処理終了
     process_time = time.time() - start
-    print('実行時間は：{} でした。'.format(process_time))  # 実行時間は：3098.3596515655518 でした。
+    print('実行時間は：{} でした。'.format(process_time))

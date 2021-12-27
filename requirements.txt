@@ -13,7 +13,6 @@ cmaes==0.8.2
 cmd2==2.2.0
 colorama==0.4.4
 colorlog==6.5.0
-dataclasses==0.8
 flatbuffers==1.12
 gast==0.4.0
 google-auth==2.3.0
