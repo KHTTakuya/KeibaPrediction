@@ -6,7 +6,8 @@ from sklearn.preprocessing import LabelEncoder
 from tensorflow import feature_column
 from sklearn.preprocessing import StandardScaler
 
-from Keiba import datalist
+from Keiba.datafile import datalist
+
 
 class KeibaProcessing:
 
@@ -53,7 +54,24 @@ class KeibaProcessing:
 
         df01 = df[df['distance'].isin(race_dis)]
 
+        # １部欠損値補完・除外
+        df01 = df01[~df01['result'].isin([0])]
+
+        df01 = df01.replace({"class": {"1勝": "500万", "2勝": "1000万", "3勝": "1600万"}})
+        df01 = df01.fillna({'fathertype': 'その他のエクリプス系'})
+
         # スピード指数の作成
+        df01 = df01.drop('basetime', axis=1)
+        df_basetime = df01.copy()
+
+        df_basetime = df_basetime[(df_basetime['result'] <= 3)]
+
+        base_time = df_basetime.groupby(['place', 'distance', 'turf']).mean()['time'].reset_index()
+        base_time = base_time.rename(columns={'time': 'basetime'})
+        base_time['basetime'] = base_time['basetime'].round(1)
+
+        df01 = pd.merge(df01, base_time, on=['place', 'turf', 'distance'], how='left')
+
         df01['conditionindex'] = 0
 
         df01['conditionindex'].mask((df01['condition'] == '良') & (df01['turf'] == '芝'), -25, inplace=True)
@@ -74,7 +92,6 @@ class KeibaProcessing:
         df01 = df01.drop(['basetime', 'weight', 'conditionindex'], axis=1)
 
         # 脚質の調整
-
         df01 = df01.replace({'legtype': {'ﾏｸﾘ': '追込'}})
         df01 = df01.replace({'legtype': {'後方': '追込'}})
         df01 = df01.replace({'legtype': {'中団': '差し'}})
@@ -84,6 +101,9 @@ class KeibaProcessing:
         df01 = df01.replace({'distance': [1600, 1700, 1800]}, 'マイル')
         df01 = df01.replace({'distance': [2000, 2200, 2300, 2400]}, '中距離')
         df01 = df01.replace({'distance': [2500, 2600, 3000, 3200, 3400, 3600]}, '長距離')
+
+        # 競争除外馬を削除する。
+        df01 = df01.dropna(subset=['pop', 'odds', '3ftime'])
 
         return df01
 
@@ -215,31 +235,54 @@ class KeibaProcessing:
         else:
             df = data
 
-        df = df.dropna(how='any')
-
         df['days'] = pd.to_datetime(df['days'])
         name_days_df = df[["horsename", "days", "pop",
-                           "odds", "rank3", "rank4", "3ftime", "result", 'speedindex']].sort_values(['horsename', 'days'])
+                           "odds", "rank3", "rank4", "3ftime", "result", 'speedindex']].sort_values(
+            ['horsename', 'days'])
 
         name_list = name_days_df['horsename'].unique()
 
-        df_list = []
+        df_shift_list = []
+        df_rolling_list = []
+
+        agg_list = {
+            'speedindex': ['mean', 'max', 'min'],
+            "pop": 'mean',
+            "odds": 'mean',
+            "rank3": 'mean',
+            "rank4": 'mean',
+            "3ftime": 'mean',
+            "result": 'mean',
+        }
+        # 当日のデータは使用できないのでspeedindexは削除する。
         df = df.drop('speedindex', axis=1)
 
         for name in name_list:
             name_df = name_days_df[name_days_df['horsename'] == name]
             shift_name_df = name_df[["pop", "odds", "rank3", "rank4", "3ftime", "result", 'speedindex']].shift(1)
+            rolling_name_df = name_df[["pop", "odds", "rank3", "rank4", "3ftime", "result", 'speedindex']].rolling(5, min_periods=2).agg(agg_list)
+
             shift_name_df['horsename'] = name
-            df_list.append(shift_name_df)
+            rolling_name_df['horsename'] = name
 
-        df_before = pd.concat(df_list)
-        df_before['days'] = name_days_df['days']
+            df_shift_list.append(shift_name_df)
+            df_rolling_list.append(rolling_name_df)
 
-        df_before = df_before.rename(columns={'pop': 'pre_pop', 'odds': 'pre_odds', 'rank3': 'pre_rank3',
-                                              'rank4': 'pre_rank4', '3ftime': 'pre_3ftime', 'result': 'pre_result'})
+        df_sh_before = pd.concat(df_shift_list)
+        df_ro_before = pd.concat(df_rolling_list)
 
-        df = pd.merge(df, df_before, on=['horsename', 'days'], how='inner')
-        
+        df_sh_before['days'] = name_days_df['days']
+        df_ro_before['days'] = name_days_df['days']
+
+        df_sh_before = df_sh_before.rename(columns={'pop': 'pre_pop', 'odds': 'pre_odds', 'rank3': 'pre_rank3',
+                                                    'rank4': 'pre_rank4', '3ftime': 'pre_3ftime',
+                                                    'result': 'pre_result'})
+
+        df = pd.merge(df, df_sh_before, on=['horsename', 'days'], how='inner')
+        df = pd.merge(df, df_ro_before, on=['horsename', 'days'], how='inner')
+
+        df = df.dropna(subset=["speedindex"])
+
         return df
 
     @staticmethod
@@ -278,6 +321,14 @@ class KeibaProcessing:
         :return: df(pandas:dataframe)
         """
         df = processed_data
+        df = df.dropna(how="any")
+        df = df.rename(columns={"('speedindex', 'mean')": "speedmean", "('speedindex', 'max')": "speedmax",
+                                "('speedindex', 'min')": "speedmin", "('pop', 'mean')": "popmean",
+                                "('odds', 'mean')": "oddsmean", "('rank4', 'mean')": "rank4mean",
+                                "('rank3', 'mean')": "rank3mean", "('3ftime', 'mean')": "3ftimemean",
+                                "('result', 'mean')": "resultmean", })
+
+        df = df.drop(["rank4mean", "rank3mean"], axis=1)
 
         d_ranking = lambda x: 1 if x in [1, 2] else 0
         df['flag'] = df['result'].map(d_ranking)
@@ -305,6 +356,8 @@ class KeibaProcessing:
                         'father_3f_to_my', 'fathertype_3f_to_my', 're_pop_now_pop', 're_odds_now_odds',
                         're_result_to_pop']
 
+        # feature_list = ['odds_hi', 'odds_hi*2']
+
         for feature in feature_list:
             df[feature] = df[feature].replace([np.inf, -np.inf], np.nan)
             df[feature] = df[feature].fillna(0)
@@ -321,6 +374,7 @@ class KeibaProcessing:
                 df = df.rename(columns={previous_list[i]: after_list[i]})
 
             num_data = datalist.num_datas
+            # test時はhorsenumをコメントアウトすること
             num_data.remove('horsenum')
             num_data.remove('speedindex')
 
