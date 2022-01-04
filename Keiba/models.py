@@ -29,7 +29,19 @@ class KeibaPrediction:
         :param data: df(pandas:dataframe)
         モデルに導入する用のdataframeを引数にいれること。特にLightGBMとtensorflowは違うdataframeを使用するため注意されたし
         """
-        self.data = data
+        df = data
+        df['days'] = pd.to_datetime(df['days'])
+        df = df.dropna(how='any')
+
+        df_pred = df[df['result'] == 999]
+        df_pred_drop = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'result'], axis=1)
+
+        df = df[df['result'] != 999]
+        df = df.drop(['days', 'horsename', 'raceid', 'result'], axis=1)
+
+        self.df = df
+        self.df_pred = df_pred
+        self.df_pred_drop = df_pred_drop
 
     def gbm_params_keiba(self):
         """
@@ -37,29 +49,17 @@ class KeibaPrediction:
         2着以内の確率が返ってくる。
         raceid, prediction(確率)が記載された状態。
         """
-        df = self.data
+        df = self.df
+        df_pred = self.df_pred
+        df_pred_drop = self.df_pred_drop
 
-        df['days'] = pd.to_datetime(df['days'])
-        df = df.dropna(how='any')
-
-<<<<<<< HEAD
-        df_pred = df[df['days'] >= datetime(2021, 11, 20)]
-        df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
-
-        df = df[df['days'] < datetime(2021, 11, 20)]
-=======
-        df_pred = df[df['days'] >= datetime(2021, 11, 26)]
-        df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
-
-        df = df[df['days'] < datetime(2021, 11, 26)]
->>>>>>> origin/master
-
-        train_x = df.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
+        train_x = df.drop('flag', axis=1)
         train_y = df['flag']
 
         X_train, X_test, y_train, y_test = train_test_split(train_x, train_y,
                                                             stratify=train_y,
                                                             random_state=0, test_size=0.3, shuffle=True)
+
         cat_cols = ['place', 'class', 'turf', 'distance', 'weather', 'condition', 'sex', 'father', 'mother',
                     'fathertype', 'fathermon', 'legtype', 'jocky', 'trainer', 'father_legtype']
 
@@ -94,7 +94,7 @@ class KeibaPrediction:
             early_stopping_rounds=20,  # 20
         )
 
-        predict_proba = model.predict(df_pred_droped, num_iteration=model.best_iteration)
+        predict_proba = model.predict(df_pred_drop, num_iteration=model.best_iteration)
 
         predict = pd.DataFrame({"raceid": df_pred['raceid'],
                                 "gbm_pred": predict_proba})
@@ -135,19 +135,18 @@ class KeibaPrediction:
                      'trainer', 'father_legtype']
         df = df.dropna(how='any')
 
-<<<<<<< HEAD
         df = df.drop(drop_list, axis=1)
 
         df_pred = df[df['days'] >= datetime(2021, 11, 20)]
         df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
 
         df = df[df['days'] < datetime(2021, 11, 20)]
-=======
+
         df_pred = df[df['days'] >= datetime(2021, 11, 26)]
         df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
 
         df = df[df['days'] < datetime(2021, 11, 26)]
->>>>>>> origin/master
+
         df = df.drop(['days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
 
         train, test = train_test_split(df, test_size=0.2)
@@ -207,11 +206,9 @@ class KeibaPrediction:
         main_df['days'] = pd.to_datetime(main_df['days'])
         main_df = main_df.dropna(how='any')
 
-<<<<<<< HEAD
         df_pred = main_df[main_df['days'] >= datetime(2021, 11, 20)]
-=======
+
         df_pred = main_df[main_df['days'] >= datetime(2021, 11, 26)]
->>>>>>> origin/master
 
         df = pd.merge(gbm_model, tf_model, on='raceid', how='left')
 

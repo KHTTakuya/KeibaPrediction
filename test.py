@@ -1,20 +1,26 @@
 import warnings
 import pandas as pd
-from Keiba.models import PredictModelTF
+
+from Keiba.testfile.test_dataprocess import TestDataProcess
+from Keiba.testfile.test_models import TestGBMModel
+from Keiba.dataprocess import KeibaProcessing
+from Keiba.models import PredictModelTF, KeibaPrediction
+
+
+def combine(data):
+    start = TestDataProcess(data)
+    df = start.add_feature_formatting_process()
+    model = TestGBMModel(df)
+    pred = model.model()
+
+    return pred
+
 
 # test用特徴量の増減などはここで処理をする。
 if __name__ == '__main__':
     warnings.simplefilter('ignore')
 
-    get_data = 'Keiba/datafile/pred_data/csvdataframe.csv'
-
-    df_test = pd.read_csv(get_data)
-
-    # get_filter = ChooseFeatureFilterMethod(get_data)
-    # get_wrapper = ChooseFeatureWrapperMethod(get_data)
-
-    # tf_data = TestTFModel(get_data)
-    # print(tf_data.models())
-
-    df_main = PredictModelTF(get_data)
-    print(df_main.models())
+    main_data = 'Keiba/datafile/main.csv'
+    df = combine(main_data)
+    print(df.to_csv('test_data.csv', encoding='utf_8_sig'))
+    # print(df)

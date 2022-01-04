@@ -69,13 +69,9 @@ if __name__ == '__main__':
     # 処理開始
     start = time.time()
     # 処理内容
-<<<<<<< HEAD
     prediction = create_keiba_prediction(main_data, df_flag=False)
     prediction.to_csv('main_ans00001.csv', encoding='utf_8_sig')
-=======
-    prediction = create_keiba_prediction(main_data)
-    prediction.to_csv('main_ans.csv', encoding='utf_8_sig')
->>>>>>> origin/master
+
     # 処理終了
     process_time = time.time() - start
     print('実行時間は：{} でした。'.format(process_time))

@@ -9,7 +9,6 @@ from sklearn.preprocessing import StandardScaler
 from Keiba.datafile import datalist
 
 
-
 class KeibaProcessing:
 
     def __init__(self, csv_data, pred_data=None):
@@ -261,8 +260,9 @@ class KeibaProcessing:
         for name in name_list:
             name_df = name_days_df[name_days_df['horsename'] == name]
             shift_name_df = name_df[["pop", "odds", "rank3", "rank4", "3ftime", "result", 'speedindex']].shift(1)
-            rolling_name_df = name_df[["pop", "odds", "rank3", "rank4", "3ftime", "result", 'speedindex']].rolling(5, min_periods=2).agg(agg_list)
-
+            rolling_name_df = name_df[["pop", "odds", "rank3", "rank4", "3ftime", "result", 'speedindex']].rolling(
+                2).agg \
+                (agg_list)
             shift_name_df['horsename'] = name
             rolling_name_df['horsename'] = name
 
@@ -329,12 +329,12 @@ class KeibaProcessing:
                                 "('rank3', 'mean')": "rank3mean", "('3ftime', 'mean')": "3ftimemean",
                                 "('result', 'mean')": "resultmean", })
 
-        df = df.drop(["rank4mean", "rank3mean"], axis=1)
+        # df = df.drop(["rank4mean", "rank3mean"], axis=1)
 
-        d_ranking = lambda x: 1 if x in [1, 2] else 0
+        d_ranking = lambda x: 1 if x in [1, 2, 3] else 0
         df['flag'] = df['result'].map(d_ranking)
 
-        drop_list = ['result', 'rank3', 'rank4', '3ftime', 'time']
+        drop_list = ['rank3', 'rank4', '3ftime', 'time']
         df = df.drop(drop_list, axis=1)
 
         cat_cols = ['place', 'class', 'turf', 'distance', 'weather', 'condition', 'sex', 'father', 'mother',

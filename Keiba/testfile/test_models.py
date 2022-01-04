@@ -1,8 +1,10 @@
 from datetime import datetime
 
 import tensorflow as tf
+from imblearn.over_sampling import SMOTE
 from tensorflow import keras
 
+import optuna.integration.lightgbm as lgb
 import os
 import tempfile
 
@@ -15,9 +17,90 @@ import seaborn as sns
 import sklearn
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 
 from Keiba.dataprocess import KeibaProcessing
+
+
+class TestGBMModel:
+
+    def __init__(self, dataframe):
+        df = dataframe
+
+
+        cat_cols = ['place', 'class', 'turf', 'distance', 'weather', 'condition', 'sex', 'father', 'mother',
+                    'fathertype', 'fathermon', 'legtype', 'jocky', 'trainer', 'father_legtype']
+
+        for c in cat_cols:
+            le = LabelEncoder()
+            le.fit(df[c])
+            df[c] = le.transform(df[c])
+
+        df['days'] = pd.to_datetime(df['days'])
+        df = df.dropna(how='any')
+
+        df_pred = df[df['result'] == 999]
+        df_pred_drop = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'result'], axis=1)
+
+        df = df[df['result'] != 999]
+        df = df.drop(['days', 'horsename', 'raceid', 'result'], axis=1)
+
+        self.df = df
+        self.df_pred = df_pred
+        self.df_pred_drop = df_pred_drop
+
+    def model(self):
+        df = self.df
+        df_pred = self.df_pred
+        df_pred_drop = self.df_pred_drop
+
+        train_x = df.drop('flag', axis=1)
+        train_y = df['flag']
+
+        X_train, X_test, y_train, y_test = train_test_split(train_x, train_y,
+                                                            stratify=train_y,
+                                                            random_state=0, test_size=0.3, shuffle=True)
+
+        cat_cols = ['place', 'class', 'turf', 'distance', 'weather', 'condition', 'sex', 'father', 'mother',
+                    'fathertype', 'fathermon', 'legtype', 'jocky', 'trainer']
+
+        sm = SMOTE()
+        x_resampled, y_resampled = sm.fit_resample(X_train, y_train)
+
+        lgb_train = lgb.Dataset(x_resampled, y_resampled, categorical_feature=cat_cols)
+        lgb_eval = lgb.Dataset(X_test, y_test, reference=lgb_train, categorical_feature=cat_cols)
+
+        params = {
+            'task': 'predict',
+            'objective': 'binary',
+            'verbosity': -1,
+        }
+
+        model = lgb.train(
+            params,
+            lgb_train,
+            categorical_feature=cat_cols,
+            valid_sets=lgb_eval,
+            num_boost_round=100,
+            early_stopping_rounds=20,
+        )
+        best_params = model.params
+
+        model = lgb.train(
+            best_params,
+            lgb_train,
+            categorical_feature=cat_cols,
+            valid_sets=lgb_eval,
+            num_boost_round=100,  # 100
+            early_stopping_rounds=20,  # 20
+        )
+
+        predict_proba = model.predict(df_pred_drop, num_iteration=model.best_iteration)
+
+        predict = pd.DataFrame({"raceid": df_pred['raceid'],
+                                "gbm_pred": predict_proba})
+
+        return predict
 
 
 class TestTFModel:
