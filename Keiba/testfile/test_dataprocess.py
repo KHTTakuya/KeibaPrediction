@@ -129,7 +129,7 @@ class TestDataProcess:
     def pre_race_data_process(dataframe):
         df = dataframe
 
-        name_days_df = df[["horsename", "days", "pop", "odds",
+        name_days_df = df[["horsename", "place", "turf", "distance", "days", "pop", "odds",
                            "rank3", "rank4", "3ftime", "result", 'speedindex']].sort_values(['horsename', 'days'])
 
         name_list = name_days_df['horsename'].unique()
@@ -144,7 +144,8 @@ class TestDataProcess:
         # renamesurukoto
         for name in name_list:
             name_df = name_days_df[name_days_df['horsename'] == name]
-            shift_name_df = name_df[["pop", "odds", "rank3", "rank4", "3ftime", "result", 'speedindex']].shift(1)
+            shift_name_df = name_df[["place", "turf", "distance", "pop", "odds", "rank3",
+                                     "rank4", "3ftime", "result", 'speedindex']].shift(1)
             rolling_name_df = name_df[["pop", "odds", "rank3", "rank4", "3ftime", 'speedindex']].rolling(5, min_periods=2)\
                 .agg(['mean', 'max', 'min'])
             shift_name_df['horsename'] = name
@@ -159,7 +160,8 @@ class TestDataProcess:
         df_sh_before['days'] = name_days_df['days']
         df_ro_before['days'] = name_days_df['days']
 
-        df_sh_before = df_sh_before.rename(columns={'pop': 'pre_pop', 'odds': 'pre_odds', 'rank3': 'pre_rank3',
+        df_sh_before = df_sh_before.rename(columns={'place': 'pre_place', 'turf': 'pre_turf', 'distance': 'pre_distance',
+                                                    'pop': 'pre_pop', 'odds': 'pre_odds', 'rank3': 'pre_rank3',
                                                     'rank4': 'pre_rank4', '3ftime': 'pre_3ftime',
                                                     'result': 'pre_result'})
 
@@ -197,8 +199,9 @@ class TestDataProcess:
 
         return main_df.to_csv('Keiba/datafile/pred_data/testcsvdataframe.csv', encoding='utf_8_sig', index=False)
 
-    def add_feature_formatting_process(self):
-        # self.formatting_data_process()
+    def add_feature_formatting_process(self, switch=True):
+        if switch:
+            self.formatting_data_process()
 
         df = pd.read_csv('Keiba/datafile/pred_data/testcsvdataframe.csv')
 

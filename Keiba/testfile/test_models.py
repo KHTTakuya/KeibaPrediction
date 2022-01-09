@@ -17,8 +17,9 @@ import seaborn as sns
 import sklearn
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.preprocessing import StandardScaler, LabelEncoder, OneHotEncoder
 
+from Keiba.datafile import datalist
 from Keiba.dataprocess import KeibaProcessing
 
 
@@ -27,9 +28,11 @@ class TestGBMModel:
     def __init__(self, dataframe):
         df = dataframe
 
+        df = df.astype({'distance': 'string'})
 
         cat_cols = ['place', 'class', 'turf', 'distance', 'weather', 'condition', 'sex', 'father', 'mother',
-                    'fathertype', 'fathermon', 'legtype', 'jocky', 'trainer', 'father_legtype']
+                    'fathertype', 'fathermon', 'legtype', 'jocky', 'trainer', 'father_legtype', 'pre_place',
+                    'pre_turf', 'pre_distance']
 
         for c in cat_cols:
             le = LabelEncoder()
@@ -40,10 +43,10 @@ class TestGBMModel:
         df = df.dropna(how='any')
 
         df_pred = df[df['result'] == 999]
-        df_pred_drop = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'result'], axis=1)
+        df_pred_drop = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'result', 'fathertype_legtype'], axis=1)
 
         df = df[df['result'] != 999]
-        df = df.drop(['days', 'horsename', 'raceid', 'result'], axis=1)
+        df = df.drop(['days', 'horsename', 'raceid', 'result', 'fathertype_legtype'], axis=1)
 
         self.df = df
         self.df_pred = df_pred
@@ -105,18 +108,38 @@ class TestGBMModel:
 
 class TestTFModel:
 
-    def __init__(self, data):
-        raw_data = pd.read_csv(data)
-        set_data = KeibaProcessing(data)
-        df = set_data.data_feature_and_formating(raw_data, gbmflag=False)
+    def __init__(self, dataframe):
+        df = dataframe
+
+        colunms_list = ['place', 'class', 'turf', 'distance', 'weather',
+                        'condition', 'sex', 'pre_place', 'pre_turf', 'pre_distance']
+        df = pd.get_dummies(df, columns=colunms_list)
+        df = df.drop(['father', 'mother', 'fathermon', 'fathertype', 'legtype', 'jocky',
+                     'trainer', 'father_legtype', 'fathertype_legtype'], axis=1)
+
+        previous_list = datalist.re_rename_list
+        after_list = datalist.rename_list
+        for i in range(len(previous_list)):
+            df = df.rename(columns={previous_list[i]: after_list[i]})
+
+        num_data = datalist.new_num_data
+
+        num_data.remove('horsenum')
+
+        scaler = StandardScaler()
+        sc = scaler.fit(df[num_data])
+
+        scalered_df = pd.DataFrame(sc.transform(df[num_data]), columns=num_data, index=df.index)
+        df.update(scalered_df)
+
         df['days'] = pd.to_datetime(df['days'])
         df = df.dropna(how='any')
 
-        df_pred = df[df['days'] >= datetime(2021, 11, 20)]
-        df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
+        df_pred = df[df['result'] == 999]
+        df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'result'], axis=1)
 
-        df = df[df['days'] < datetime(2021, 11, 20)]
-        df = df.drop(['days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
+        df = df[df['result'] != 999]
+        df = df.drop(['days', 'horsename', 'raceid', 'result'], axis=1)
 
         self.df = df
         self.pred_df = df_pred_droped
@@ -133,10 +156,9 @@ class TestTFModel:
 
     def models(self):
         df = self.df
-        drop_list = ['place', 'class', 'turf', 'distance', 'weather', 'condition', 'sex',
-                     'father', 'mother', 'fathermon', 'fathertype', 'legtype', 'jocky',
-                     'trainer', 'father_legtype']
-        cleaned_df = df.drop(drop_list, axis=1)
+        pred_df = self.pred_df
+        predictions_df = pred_df.drop('raceid', axis=1)
+        cleaned_df = df.copy()
         neg, pos = np.bincount(cleaned_df['flag'])
         total = neg + pos
 
@@ -146,15 +168,15 @@ class TestTFModel:
         train_labels = np.array(train_df.pop('flag'))
         bool_train_labels = train_labels != 0
         val_labels = np.array(val_df.pop('flag'))
-        test_labels = np.array(test_df.pop('flag'))
+        pred_labels = np.array(predictions_df)
 
         train_features = np.array(train_df)
         val_features = np.array(val_df)
-        test_features = np.array(test_df)
+        pred_features = np.array(predictions_df)
 
         train_features = np.clip(train_features, -5, 5)
         val_features = np.clip(val_features, -5, 5)
-        test_features = np.clip(test_features, -5, 5)
+        pred_features = np.clip(pred_features, -5, 5)
 
         pos_df = pd.DataFrame(train_features[bool_train_labels], columns=train_df.columns)
         neg_df = pd.DataFrame(train_features[~bool_train_labels], columns=train_df.columns)
@@ -197,9 +219,13 @@ class TestTFModel:
                 output_bias = tf.keras.initializers.Constant(output_bias)
             model = keras.Sequential([
                 keras.layers.Dense(
-                    16, activation='relu',
+                    128, activation='relu',
                     input_shape=(train_features.shape[-1],)),
-                keras.layers.Dropout(0.5),
+                keras.layers.Dropout(0.2),
+                keras.layers.Dense(
+                    128, activation='relu',
+                    input_shape=(train_features.shape[-1],)),
+                keras.layers.Dropout(0.2),
                 keras.layers.Dense(1, activation='sigmoid',
                                    bias_initializer=output_bias),
             ])
@@ -252,22 +278,34 @@ class TestTFModel:
 
         class_weight = {0: weight_for_0, 1: weight_for_1}
 
-        resampled_model = make_model()
-        resampled_model.load_weights(initial_weights)
+        weighted_model = make_model()
+        weighted_model.load_weights(initial_weights)
 
         # Reset the bias to zero, since this dataset is balanced.
-        output_layer = resampled_model.layers[-1]
+        output_layer = weighted_model.layers[-1]
         output_layer.bias.assign([0])
 
         val_ds = tf.data.Dataset.from_tensor_slices((val_features, val_labels)).cache()
         val_ds = val_ds.batch(BATCH_SIZE).prefetch(2)
 
-        resampled_history = resampled_model.fit(
-            resampled_ds,
-            # These are not real epochs
-            steps_per_epoch=20,
+        weight_history = weighted_model.fit(
+            train_features,
+            train_labels,
+            batch_size=BATCH_SIZE,
+            steps_per_epoch=50,
             epochs=10 * EPOCHS,
             callbacks=[early_stopping],
-            validation_data=(val_ds))
+            validation_data=(val_features, val_labels),
+            class_weight=class_weight)
 
-        return plot_metrics(resampled_history)
+        predictions = weighted_model.predict(pred_features)
+        predict = [float(i) for i in predictions]
+
+        d = {
+            "raceid": pred_df['raceid'],
+            "tf_pred": predict
+        }
+
+        predict_df = pd.DataFrame(data=d)
+
+        return predict_df.to_csv('test.csv', encoding='utf_8_sig')

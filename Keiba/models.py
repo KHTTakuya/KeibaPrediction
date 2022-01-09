@@ -1,54 +1,50 @@
-import os
-import tempfile
-from datetime import datetime
-
-import optuna.integration.lightgbm as lgb
-import pandas as pd
-import numpy as np
-
 import tensorflow as tf
-from tensorflow.keras import layers
+from imblearn.over_sampling import SMOTE
 from tensorflow import keras
 
+import optuna.integration.lightgbm as lgb
+import os
+import tempfile
+
+import numpy as np
+import pandas as pd
+
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 
-from imblearn.over_sampling import SMOTE
-
-from Keiba.dataprocess import KeibaProcessing
-
-"""
-task:
-datetimeの変数化をすすめる。__init__に記載する。
-"""
+from Keiba.datafile import datalist
 
 
-class KeibaPrediction:
+class PredictionModelGBM:
 
-    def __init__(self, data):
-        """
-        :param data: df(pandas:dataframe)
-        モデルに導入する用のdataframeを引数にいれること。特にLightGBMとtensorflowは違うdataframeを使用するため注意されたし
-        """
-        df = data
+    def __init__(self, dataframe):
+        df = dataframe
+
+        df = df.astype({'distance': 'string'})
+
+        cat_cols = ['place', 'class', 'turf', 'distance', 'weather', 'condition', 'sex', 'father', 'mother',
+                    'fathertype', 'fathermon', 'legtype', 'jocky', 'trainer', 'father_legtype', 'pre_place',
+                    'pre_turf', 'pre_distance']
+
+        for c in cat_cols:
+            le = LabelEncoder()
+            le.fit(df[c])
+            df[c] = le.transform(df[c])
+
         df['days'] = pd.to_datetime(df['days'])
         df = df.dropna(how='any')
 
         df_pred = df[df['result'] == 999]
-        df_pred_drop = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'result'], axis=1)
+        df_pred_drop = df_pred.drop(['pop', 'flag', 'days', 'horsename', 'raceid', 'result', 'fathertype_legtype'], axis=1)
 
         df = df[df['result'] != 999]
-        df = df.drop(['days', 'horsename', 'raceid', 'result'], axis=1)
+        df = df.drop(['pop', 'days', 'horsename', 'raceid', 'result', 'fathertype_legtype'], axis=1)
 
         self.df = df
         self.df_pred = df_pred
         self.df_pred_drop = df_pred_drop
 
-    def gbm_params_keiba(self):
-        """
-        :return: df(pandas:dataframe)
-        2着以内の確率が返ってくる。
-        raceid, prediction(確率)が記載された状態。
-        """
+    def model(self):
         df = self.df
         df_pred = self.df_pred
         df_pred_drop = self.df_pred_drop
@@ -61,7 +57,7 @@ class KeibaPrediction:
                                                             random_state=0, test_size=0.3, shuffle=True)
 
         cat_cols = ['place', 'class', 'turf', 'distance', 'weather', 'condition', 'sex', 'father', 'mother',
-                    'fathertype', 'fathermon', 'legtype', 'jocky', 'trainer', 'father_legtype']
+                    'fathertype', 'fathermon', 'legtype', 'jocky', 'trainer']
 
         sm = SMOTE()
         x_resampled, y_resampled = sm.fit_resample(X_train, y_train)
@@ -101,189 +97,70 @@ class KeibaPrediction:
 
         return predict
 
-    @staticmethod
-    def df_to_dataset(dataframe, shuffle=True, batch_size=32):
-        """
-        :param dataframe:
-        :param shuffle:
-        :param batch_size:
-        :return: ds
-        原則、クラス内呼び出しのみ。
-        外部からの呼び出しは不可。(デバックをする場合は除く)
-        """
-        dataframe = dataframe.copy()
-        labels = dataframe.pop('flag')
-        ds = tf.data.Dataset.from_tensor_slices((dict(dataframe), labels))
-        if shuffle:
-            ds = ds.shuffle(buffer_size=len(dataframe))
-        ds = ds.batch(batch_size)
-        return ds
 
-    def tensorflow_models(self, feature_layer):
-        """
-
-        :param feature_layer: df_to_tfdataからの返り値をいれる。
-        :return: df(pandas:dataframe)
-        2着以内の確率が返ってくる。
-        raceid, prediction(確率)が記載された状態。
-        """
-        df = self.data
-
-        df['days'] = pd.to_datetime(df['days'])
-        drop_list = ['place', 'class', 'turf', 'distance', 'weather', 'condition', 'sex',
-                     'father', 'mother', 'fathermon', 'fathertype', 'legtype', 'jocky',
-                     'trainer', 'father_legtype']
-        df = df.dropna(how='any')
-
-        df = df.drop(drop_list, axis=1)
-
-        df_pred = df[df['days'] >= datetime(2021, 11, 20)]
-        df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
-
-        df = df[df['days'] < datetime(2021, 11, 20)]
-
-        df_pred = df[df['days'] >= datetime(2021, 11, 26)]
-        df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
-
-        df = df[df['days'] < datetime(2021, 11, 26)]
-
-        df = df.drop(['days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
-
-        train, test = train_test_split(df, test_size=0.2)
-        train, val = train_test_split(train, test_size=0.2)
-
-        batch_size = 32
-        train_ds = self.df_to_dataset(train, batch_size=batch_size)
-        val_ds = self.df_to_dataset(val, shuffle=False, batch_size=batch_size)
-        test_ds = self.df_to_dataset(test, shuffle=False, batch_size=batch_size)
-
-        pred_ds = tf.data.Dataset.from_tensor_slices(dict(df_pred_droped))
-        pred_ds = pred_ds.batch(batch_size=batch_size)
-
-        model = tf.keras.Sequential([
-            feature_layer,
-            layers.Dense(128, activation='relu', kernel_regularizer=keras.regularizers.l2(0.001)),
-            tf.keras.layers.Dropout(0.1),
-            layers.Dense(128, activation='relu', kernel_regularizer=keras.regularizers.l2(0.001)),
-            tf.keras.layers.Dropout(0.1),
-            layers.Dense(128, activation='relu', kernel_regularizer=keras.regularizers.l2(0.001)),
-            layers.Dense(64, activation='relu'),
-            layers.Dense(1, activation='sigmoid')
-        ])
-
-        model.compile(optimizer='adam',
-                      loss='binary_crossentropy',
-                      metrics=['accuracy'])
-
-        model.fit(train_ds,
-                  validation_data=val_ds,
-                  epochs=5)
-
-        # loss, accuracy = model.evaluate(test_ds)
-
-        predictions = model.predict(pred_ds)
-        predict = [i for i in predictions]
-
-        d = {
-            "raceid": df_pred['raceid'],
-            "tf_pred": predict
-        }
-
-        predict = pd.DataFrame(data=d)
-
-        return predict
-
-    def model_concatenation(self, gbm_model=None, tf_model=None):
-        """
-        :param gbm_model:　df(pandas:dataframe) gbm_params_keibaから持ってくる。
-        :param tf_model:　df(pandas:dataframe) tensorflow_modelsから持ってくる。
-        :return: df(pandas:dataframe)
-        予想印やフラグの作成。
-        なるべくdf.to_csvでcsvデータとして返すのがよろし
-        """
-
-        main_df = self.data
-        main_df['days'] = pd.to_datetime(main_df['days'])
-        main_df = main_df.dropna(how='any')
-
-        df_pred = main_df[main_df['days'] >= datetime(2021, 11, 20)]
-
-        df_pred = main_df[main_df['days'] >= datetime(2021, 11, 26)]
-
-        df = pd.merge(gbm_model, tf_model, on='raceid', how='left')
-
-        df = df.dropna(how='any')
-
-        # ここは何故かエラーが起きているので一時的に止めている。もし"[]"がついている場合はコメントアウトを外して実行すること。
-        # for i in range(len(df['tf_pred'])):
-        #     df['tf_pred'][i] = df['tf_pred'][i].replace('[', '')
-        #     df['tf_pred'][i] = df['tf_pred'][i].replace(']', '')
-
-        df['gbm_pred'] = df['gbm_pred'].astype(float)
-        df['tf_pred'] = df['tf_pred'].astype(float)
-
-        """
-        todo:
-        馬番ごとでかうんとしていく。
-        """
-        # gbm_pred, tf_pred, logi_pred
-        df['new_mark_flag'] = '×'
-        df['new_flag'] = 0
-
-        # 0.5が2個以上のフラグ作成。〇
-        df['new_mark_flag'].mask((df['gbm_pred'] >= 0.5) | (df['tf_pred'] >= 0.5), '〇', inplace=True)
-
-        # 0-1フラグの作成と指標作成(見やすくするため)
-        df['new_flag'].mask(((df['gbm_pred'] * 0.45) + (df['tf_pred'] * 0.55)) >= 0.5, 1, inplace=True)
-        df['malt_index'] = ((df['gbm_pred'] * 0.45) + (df['tf_pred'] * 0.55)) * 100
-
-        df = pd.merge(df_pred, df, on='raceid', how='left')
-
-        return df
+"""
+memo:
+確率が大幅に下がる要因
+・各馬の平均順位
+・前走の成績での距離
+"""
 
 
 class PredictModelTF:
 
-    def __init__(self, data):
-        raw_data = pd.read_csv(data)
-        set_data = KeibaProcessing(data)
-        df = set_data.data_feature_and_formating(raw_data, gbmflag=False)
+    def __init__(self, dataframe):
+        df = dataframe
+
+        df['flag_konkan'] = (df['distance'] % 400 == 0).astype(int)
+
+        df = df.replace({'distance': [1000, 1200, 1400, 1500]}, '短距離')
+        df = df.replace({'distance': [1600, 1700, 1800]}, 'マイル')
+        df = df.replace({'distance': [2000, 2200, 2300, 2400]}, '中距離')
+        df = df.replace({'distance': [2500, 2600, 3000, 3200, 3400, 3600]}, '長距離')
+
+        df['flag_pre_konkan'] = (df['pre_distance'] % 400 == 0).astype(int)
+
+        colunms_list = ['place', 'class', 'turf', 'weather', 'distance',
+                        'condition', 'sex', 'pre_place', 'pre_turf']
+        df = pd.get_dummies(df, columns=colunms_list)
+        df = df.drop(['pop', 'father', 'mother', 'fathermon', 'fathertype', 'legtype', 'jocky',
+                      'trainer', 'father_legtype', 'fathertype_legtype', 'pre_distance'], axis=1)
+
+        previous_list = datalist.re_rename_list
+        after_list = datalist.rename_list
+        for i in range(len(previous_list)):
+            df = df.rename(columns={previous_list[i]: after_list[i]})
+
+        num_data = datalist.new_num_data
+
+        num_data.remove('horsenum')
+
+        scaler = StandardScaler()
+        sc = scaler.fit(df[num_data])
+
+        scalered_df = pd.DataFrame(sc.transform(df[num_data]), columns=num_data, index=df.index)
+        df.update(scalered_df)
+
         df['days'] = pd.to_datetime(df['days'])
         df = df.dropna(how='any')
 
-        # df_drop_list = df.loc[:, 'place_odds': "distance_3ftime"]
-        # start_drop_list = [x for x in df_drop_list.columns]
-        # df = df.drop(start_drop_list, axis=1)
+        df_pred = df[df['result'] == 999]
+        df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'result'], axis=1)
 
-        df_pred = df[df['days'] >= datetime(2021, 11, 20)]
-        df_pred_droped = df_pred.drop(['flag', 'days', 'horsename', 'odds', 'pop'], axis=1)
-
-        df = df[df['days'] < datetime(2021, 11, 20)]
-        df = df.drop(['days', 'horsename', 'raceid', 'odds', 'pop'], axis=1)
-
-        drop_list = ['place', 'class', 'turf', 'distance', 'weather', 'condition', 'sex',
-                     'father', 'mother', 'fathermon', 'fathertype', 'legtype', 'jocky',
-                     'trainer', 'father_legtype']
-
-        df_pred_droped = df_pred_droped.drop(drop_list, axis=1)
-        df = df.drop(drop_list, axis=1)
+        df = df[df['result'] != 999]
+        df = df.drop(['days', 'horsename', 'raceid', 'result'], axis=1)
 
         self.df = df
         self.pred_df = df_pred_droped
 
     def models(self):
+
         df = self.df
         pred_df = self.pred_df
-        check_df = self.pred_df
-        pred_df = pred_df.drop('raceid', axis=1)
-        cleaned_df = df.dropna(how='any')
-
+        predictions_df = pred_df.drop('raceid', axis=1)
+        cleaned_df = df.copy()
         neg, pos = np.bincount(cleaned_df['flag'])
         total = neg + pos
-
-        EPOCHS = 100
-        BATCH_SIZE = 2048
-        BUFFER_SIZE = 100000
 
         train_df, test_df = train_test_split(cleaned_df, test_size=0.2)
         train_df, val_df = train_test_split(train_df, test_size=0.2)
@@ -291,11 +168,11 @@ class PredictModelTF:
         train_labels = np.array(train_df.pop('flag'))
         bool_train_labels = train_labels != 0
         val_labels = np.array(val_df.pop('flag'))
-        pred_labels = np.array(pred_df)
+        pred_labels = np.array(predictions_df)
 
         train_features = np.array(train_df)
         val_features = np.array(val_df)
-        pred_features = np.array(pred_df)
+        pred_features = np.array(predictions_df)
 
         train_features = np.clip(train_features, -5, 5)
         val_features = np.clip(val_features, -5, 5)
@@ -319,22 +196,36 @@ class PredictModelTF:
             keras.metrics.Precision(name='precision'),
             keras.metrics.Recall(name='recall'),
             keras.metrics.AUC(name='auc'),
-            keras.metrics.AUC(name='prc', curve='PR'),  # precision-recall curve
+            keras.metrics.AUC(name='prc', curve='PR'),
         ]
 
+        EPOCHS = 100
+        BATCH_SIZE = 2048
+        BUFFER_SIZE = 100000
+
         def make_ds(features, labels):
-            ds = tf.data.Dataset.from_tensor_slices((features, labels))  # .cache()
+            ds = tf.data.Dataset.from_tensor_slices((features, labels))
             ds = ds.shuffle(BUFFER_SIZE).repeat()
             return ds
+
+        pos_ds = make_ds(pos_features, pos_labels)
+        neg_ds = make_ds(neg_features, neg_labels)
 
         def make_model(metrics=METRICS, output_bias=None):
             if output_bias is not None:
                 output_bias = tf.keras.initializers.Constant(output_bias)
             model = keras.Sequential([
                 keras.layers.Dense(
-                    16, activation='relu',
+                    128, activation='relu',
                     input_shape=(train_features.shape[-1],)),
-                keras.layers.Dropout(0.5),
+                keras.layers.Dropout(0.1),
+                keras.layers.Dense(
+                    128, activation='relu',
+                    input_shape=(train_features.shape[-1],)),
+                keras.layers.Dropout(0.1),
+                keras.layers.Dense(
+                    128, activation='relu',
+                    input_shape=(train_features.shape[-1],)),
                 keras.layers.Dense(1, activation='sigmoid',
                                    bias_initializer=output_bias),
             ])
@@ -345,12 +236,6 @@ class PredictModelTF:
                 metrics=metrics)
 
             return model
-
-        pos_ds = make_ds(pos_features, pos_labels)
-        neg_ds = make_ds(neg_features, neg_labels)
-        resampled_ds = tf.data.experimental.sample_from_datasets([pos_ds, neg_ds], weights=[0.5, 0.5])
-        resampled_ds = resampled_ds.batch(BATCH_SIZE).prefetch(2)
-        resampled_steps_per_epoch = np.ceil(2.0 * neg / BATCH_SIZE)
 
         early_stopping = tf.keras.callbacks.EarlyStopping(
             monitor='val_prc',
@@ -372,32 +257,67 @@ class PredictModelTF:
 
         class_weight = {0: weight_for_0, 1: weight_for_1}
 
-        resampled_model = make_model()
-        resampled_model.load_weights(initial_weights)
+        weighted_model = make_model()
+        weighted_model.load_weights(initial_weights)
 
-        output_layer = resampled_model.layers[-1]
+        output_layer = weighted_model.layers[-1]
         output_layer.bias.assign([0])
 
         val_ds = tf.data.Dataset.from_tensor_slices((val_features, val_labels)).cache()
         val_ds = val_ds.batch(BATCH_SIZE).prefetch(2)
 
-        resampled_model.fit(
-            resampled_ds,
-            # These are not real epochs
-            steps_per_epoch=200,
+        weighted_model.fit(
+            train_features,
+            train_labels,
+            batch_size=BATCH_SIZE,
+            steps_per_epoch=50,
             epochs=10 * EPOCHS,
             callbacks=[early_stopping],
-            class_weight=class_weight,
-            validation_data=val_ds)
+            validation_data=(val_features, val_labels),
+            class_weight=class_weight)
 
-        predictions = resampled_model.predict(pred_features)
-        predict = [float(i) * 1000000 for i in predictions]
+        predictions = weighted_model.predict(pred_features)
+        predict = [float(i) for i in predictions]
 
         d = {
-            "raceid": check_df['raceid'],
+            "raceid": pred_df['raceid'],
             "tf_pred": predict
         }
 
         predict_df = pd.DataFrame(data=d)
 
-        return predict_df.to_csv('test.csv', encoding='utf_8_sig')
+        return predict_df
+
+
+class MergeModelDataToCsv:
+
+    def __init__(self, main_data, gbm_data, tf_data):
+        df = main_data
+        df = df[df['result'] == 999]
+        df = df[['raceid', 'place', 'class', 'distance', 'horsename', 'jocky', 'speedindex', 'speedmean']]
+
+        self.df = df
+        self.gbm_data = gbm_data
+        self.tf_data = tf_data
+
+    def merged_data(self):
+        df = self.df
+
+        df = pd.merge(df, self.gbm_data, on='raceid', how='left')
+        df = pd.merge(df, self.tf_data, on='raceid', how='left')
+
+        df['tf_pred'] = df['tf_pred'].astype(float)
+
+        # gbm_pred, tf_pred, logi_pred
+        df['new_mark_flag'] = '×'
+        df['new_flag'] = 0
+
+        # # 0.5が2個以上のフラグ作成。〇
+        df['new_mark_flag'].mask((df['gbm_pred'] >= 0.5) | (df['tf_pred'] >= 0.5), '〇', inplace=True)
+
+        # 0.5が3個以上のフラグ作成。◎
+        df['new_mark_flag'].mask((df['gbm_pred'] >= 0.5) & (df['tf_pred'] >= 0.5), '◎', inplace=True)
+
+        df['new_flag'].mask(((df['gbm_pred'] * 0.45) + (df['tf_pred'] * 0.55)) >= 0.5, 1, inplace=True)
+
+        return df.to_csv('ans.csv', encoding='utf_8_sig')
