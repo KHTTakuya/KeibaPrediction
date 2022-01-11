@@ -6,7 +6,7 @@ from sklearn.feature_selection import (VarianceThreshold, SelectKBest,
                                        mutual_info_classif, SequentialFeatureSelector, RFE, RFECV)
 from mlxtend.feature_selection import ExhaustiveFeatureSelector as EFS
 from sklearn.ensemble import RandomForestClassifier
-from Keiba.dataprocess import KeibaProcessing
+from Keiba.dataprocess import DataProcess
 
 
 class ChooseFeatureFilterMethod:
@@ -14,9 +14,9 @@ class ChooseFeatureFilterMethod:
     def __init__(self, data):
         # data = csv file
         df = pd.read_csv(data)
-        get_form = KeibaProcessing(data)
+        get_form = DataProcess(data)
 
-        df = get_form.data_feature_and_formating(df, gbmflag=False)
+        df = get_form.add_feature_formatting_process(switch=False)
         df['days'] = pd.to_datetime(df['days'])
         df = df[df['days'] >= datetime(2021, 11, 20)]
 
@@ -75,9 +75,9 @@ class ChooseFeatureWrapperMethod:
 
     def __init__(self, data, f_select=80):
         df = pd.read_csv(data)
-        get_form = KeibaProcessing(data)
+        get_form = DataProcess(data)
 
-        df = get_form.data_feature_and_formating(df, gbmflag=False)
+        df = get_form.add_feature_formatting_process(switch=False)
         df['days'] = pd.to_datetime(df['days'])
         df = df[df['days'] >= datetime(2021, 11, 20)]
 

@@ -35,10 +35,11 @@ class PredictionModelGBM:
         df = df.dropna(how='any')
 
         df_pred = df[df['result'] == 999]
-        df_pred_drop = df_pred.drop(['pop', 'flag', 'days', 'horsename', 'raceid', 'result', 'fathertype_legtype'], axis=1)
+        df_pred_drop = df_pred.drop(
+            ['odds', 'pop', 'flag', 'days', 'horsename', 'raceid', 'result', 'fathertype_legtype'], axis=1)
 
         df = df[df['result'] != 999]
-        df = df.drop(['pop', 'days', 'horsename', 'raceid', 'result', 'fathertype_legtype'], axis=1)
+        df = df.drop(['odds', 'pop', 'days', 'horsename', 'raceid', 'result', 'fathertype_legtype'], axis=1)
 
         self.df = df
         self.df_pred = df_pred
@@ -120,9 +121,10 @@ class PredictModelTF:
 
         df['flag_pre_konkan'] = (df['pre_distance'] % 400 == 0).astype(int)
 
-        colunms_list = ['place', 'class', 'turf', 'weather', 'distance',
+        columns_list = ['place', 'class', 'turf', 'weather', 'distance',
                         'condition', 'sex', 'pre_place', 'pre_turf']
-        df = pd.get_dummies(df, columns=colunms_list)
+
+        df = pd.get_dummies(df, columns=columns_list)
         df = df.drop(['pop', 'father', 'mother', 'fathermon', 'fathertype', 'legtype', 'jocky',
                       'trainer', 'father_legtype', 'fathertype_legtype', 'pre_distance'], axis=1)
 
@@ -279,6 +281,15 @@ class PredictModelTF:
         predictions = weighted_model.predict(pred_features)
         predict = [float(i) for i in predictions]
 
+        # ちゃんと予測できているのかの確認
+        count = 0
+        for i in range(len(predict)):
+            if predict[i] >= 0.2:
+                count += 1
+        if count <= (len(predict) / 2):
+            self.models()
+        # ここまで
+
         d = {
             "raceid": pred_df['raceid'],
             "tf_pred": predict
@@ -308,9 +319,10 @@ class MergeModelDataToCsv:
 
         df['tf_pred'] = df['tf_pred'].astype(float)
 
-        # gbm_pred, tf_pred, logi_pred
+        # gbm_pred, tf_pred
         df['new_mark_flag'] = '×'
         df['new_flag'] = 0
+        df['probability'] = (((df['gbm_pred'] * 0.45) + (df['tf_pred'] * 0.55)) * 100).round(2)
 
         # # 0.5が2個以上のフラグ作成。〇
         df['new_mark_flag'].mask((df['gbm_pred'] >= 0.5) | (df['tf_pred'] >= 0.5), '〇', inplace=True)

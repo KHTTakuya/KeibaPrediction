@@ -1,6 +1,15 @@
 import pandas as pd
 import numpy as np
 
+"""
+Memo:
+numpy配列を加工すると処理が急激に重くなるので(16GB一杯になる)、解決できるまでは主成分分析・クラスター分析
+などといったreturnがnumpy配列を返す分析手法であるものは使用不可とする。解決が出来次第処理に追加する。
+※現状出ている解決策
+・メモリを増やす。
+・AWSなどを利用する。
+"""
+
 
 class TestDataProcess:
 

@@ -1,120 +1,82 @@
-import numpy as np
 import pandas as pd
-import tensorflow as tf
-
-from sklearn.preprocessing import LabelEncoder
-from tensorflow import feature_column
-from sklearn.preprocessing import StandardScaler
-
-from Keiba.datafile import datalist
+import numpy as np
 
 
-class KeibaProcessing:
+class DataProcess:
 
-    def __init__(self, csv_data, pred_data=None):
-        """
-        :param csv_data:
-        このクラスに競馬の前処理方法を記載すること、継ぎ足しする場合は
-        "create_dataframe"に実行関数を記載する。
-        """
-        self.csv_data = csv_data
-        self.pred_data = pred_data
+    def __init__(self, csv_data):
+        df = pd.read_csv(csv_data, encoding='shift-jis')
 
-    def create_dataframe(self):
-        """
-        :return: df(pandas:dataframe)
-        create_dataframeからlightGBMに行く場合は、data_feature_and_formating関数を実行してから起動すること。
-        また、Tensorflowに行く場合は、df_to_tflayerとdata_feature_and_formatingをFalseにしてから実行すること。
-        なお原則、データ加工を行う際はデバック作業、新規実装を除いてこちらの関数のみを利用すること。
-        """
-        df_data = self.preprocessing(self.csv_data)
-
-        main = self.pre_horse_data_process(df_data, pred_data=self.pred_data)
-        jockey = self.jockey_data_process(df_data)
-        father = self.father_data_process(df_data)
-        father_type = self.father_data_process(df_data, index='fathertype')
-        place = self.place_data_process(df_data)
-        distance = self.place_data_process(df_data, index='distance')
-
-        df = self.data_concatenation(main, jockey, father, father_type, place, distance)
-
-        return df
-
-    @staticmethod
-    def preprocessing(data):
-        """
-        :param data: csvデータ
-        :return: df(pandas:dataframe)
-        基礎条件のデータ削除
-        """
-        df = pd.read_csv(data, encoding="shift-jis")
-        # 障害レースを削除する。
+        # 簡単な削除
+        # 障害レースを削除
         race_dis = [1000, 1200, 1400, 1500, 1600, 1700, 1800, 2000, 2200,
                     2300, 2400, 2500, 2600, 3000, 3200, 3400, 3600]
-
-        df01 = df[df['distance'].isin(race_dis)]
+        df = df[df['distance'].isin(race_dis)]
 
         # １部欠損値補完・除外
-        df01 = df01[~df01['result'].isin([0])]
+        df = df[~df['result'].isin([0])]
+        df = df.drop('basetime', axis=1)
 
-        df01 = df01.replace({"class": {"1勝": "500万", "2勝": "1000万", "3勝": "1600万"}})
-        df01 = df01.fillna({'fathertype': 'その他のエクリプス系'})
+        df = df.replace({"class": {"1勝": "500万", "2勝": "1000万", "3勝": "1600万"}})
+        df = df.fillna({'fathertype': 'その他のエクリプス系'})
 
-        # スピード指数の作成
-        df01 = df01.drop('basetime', axis=1)
-        df_basetime = df01.copy()
+        # 脚質の調整
+        df = df.replace({'legtype': {'ﾏｸﾘ': '追込'}})
+        df = df.replace({'legtype': {'後方': '追込'}})
+        df = df.replace({'legtype': {'中団': '差し'}})
+        df = df.fillna({'legtype': '自在'})
 
+        # 競争除外馬を削除する。
+        df = df.dropna(subset=['pop', 'odds', '3ftime'])
+
+        df_main = df.copy()
+
+        self.df = df
+        self.df_main = df_main
+
+    def speedindex_data_process(self):
+        """
+        :return:pandas dataframe(add speedindex)
+        """
+        df_start = self.df
+        df = df_start.copy()
+
+        df_basetime = df.copy()
         df_basetime = df_basetime[(df_basetime['result'] <= 3)]
 
         base_time = df_basetime.groupby(['place', 'distance', 'turf']).mean()['time'].reset_index()
         base_time = base_time.rename(columns={'time': 'basetime'})
         base_time['basetime'] = base_time['basetime'].round(1)
 
-        df01 = pd.merge(df01, base_time, on=['place', 'turf', 'distance'], how='left')
+        df = pd.merge(df, base_time, on=['place', 'turf', 'distance'], how='left')
 
-        df01['conditionindex'] = 0
+        df['conditionindex'] = 0
 
-        df01['conditionindex'].mask((df01['condition'] == '良') & (df01['turf'] == '芝'), -25, inplace=True)
-        df01['conditionindex'].mask((df01['condition'] == '稍') & (df01['turf'] == '芝'), -15, inplace=True)
-        df01['conditionindex'].mask((df01['condition'] == '重') & (df01['turf'] == '芝'), -5, inplace=True)
-        df01['conditionindex'].mask((df01['condition'] == '良') & (df01['turf'] == 'ダ'), -20, inplace=True)
-        df01['conditionindex'].mask((df01['condition'] == '稍') & (df01['turf'] == 'ダ'), -10, inplace=True)
+        df['conditionindex'].mask((df['condition'] == '良') & (df['turf'] == '芝'), -25, inplace=True)
+        df['conditionindex'].mask((df['condition'] == '稍') & (df['turf'] == '芝'), -15, inplace=True)
+        df['conditionindex'].mask((df['condition'] == '重') & (df['turf'] == '芝'), -5, inplace=True)
+        df['conditionindex'].mask((df['condition'] == '良') & (df['turf'] == 'ダ'), -20, inplace=True)
+        df['conditionindex'].mask((df['condition'] == '稍') & (df['turf'] == 'ダ'), -10, inplace=True)
 
         df['basetime'].fillna(df['basetime'].median())
         df['weight'].fillna(df['weight'].median())
 
-        time = (df01['basetime'] * 10) - (df01['time'] * 10)
-        disindex = 1 / (df01['basetime'] * 10) * 1000
-        weight = (df01['weight'] - 55) * 2
+        time = (df['basetime'] * 10) - (df['time'] * 10)
+        disindex = 1 / (df['basetime'] * 10) * 1000
+        weight = (df['weight'] - 55) * 2
 
-        df01['speedindex'] = time * disindex + df01['conditionindex'] + weight + 80
+        df['speedindex'] = time * disindex + df['conditionindex'] + weight + 80
 
-        df01 = df01.drop(['basetime', 'weight', 'conditionindex'], axis=1)
+        df_speedindex = df[['raceid', 'days', 'horsename', 'speedindex']]
 
-        # 脚質の調整
-        df01 = df01.replace({'legtype': {'ﾏｸﾘ': '追込'}})
-        df01 = df01.replace({'legtype': {'後方': '追込'}})
-        df01 = df01.replace({'legtype': {'中団': '差し'}})
-        df01 = df01.fillna({'legtype': '自在'})
+        return df_speedindex
 
-        df01 = df01.replace({'distance': [1000, 1200, 1400, 1500]}, '短距離')
-        df01 = df01.replace({'distance': [1600, 1700, 1800]}, 'マイル')
-        df01 = df01.replace({'distance': [2000, 2200, 2300, 2400]}, '中距離')
-        df01 = df01.replace({'distance': [2500, 2600, 3000, 3200, 3400, 3600]}, '長距離')
-
-        # 競争除外馬を削除する。
-        df01 = df01.dropna(subset=['pop', 'odds', '3ftime'])
-
-        return df01
-
-    @staticmethod
-    def jockey_data_process(data):
+    def jockey_data_process(self):
         """
-        :param data: preprocessingから受け取る。
-        :return: df(pandas:dataframe)
-        騎手のdataframeを作成する。
+        :return:pandas dataframe(add jockey data)
         """
-        df = data
+        df_start = self.df
+        df = df_start.copy()
 
         df.loc[df['result'] >= 3, 'result'] = 0
         df.loc[df['result'] == 2, 'result'] = 1
@@ -128,16 +90,13 @@ class KeibaProcessing:
 
         return table_jockey
 
-    @staticmethod
-    def father_data_process(data, index='father'):
+    def father_data_process(self, index='father'):
         """
-        :param data: df(preprocessingを通して)いれること。csvデータのまま入れるとエラーがおきる。
-        :param index: 初期はfather,fathertypeで作成する場合はfathertypeに変更すること。
-        :return: df(dataframe)
-        indexにはfatherとfathertypeのみが対象。その他を入れるのは予期せぬエラーが起きる可能があるため入れないこと。
-        placeとdistanceで作成する場合は、place_data_processで作成すること。
+        :param index:default-father, and use fathertype
+        :return:pandas dataframe(add father or fathertype data)
         """
-        df = data
+        df_start = self.df
+        df = df_start.copy()
         # fatherの連結対象(レース場成績、距離、芝ダート、重馬場成績)
 
         df.loc[df['result'] >= 3, 'result'] = 0
@@ -177,92 +136,32 @@ class KeibaProcessing:
         return father
 
     @staticmethod
-    def place_data_process(data, index='place'):
+    def pre_race_data_process(dataframe):
         """
-        :param data: df(preprocessingを通して)いれること。csvデータのまま入れるとエラーがおきる。
-        :param index: 初期はplace,distanceで作成する場合はdistanceに変更すること。
-        :return: df(pandas:dataframe)
-        indexにはplaceとdistanceのみが対象。その他を入れるのは予期せぬエラーが起きる可能があるため入れないこと。
-        fatherとfathertypeで作成したい場合は、father_data_processで作成すること。
+        :param dataframe: read only pandas dataframe
+        :return: pandas dataframe
         """
-        global table_place_time
-        df = data
+        df = dataframe
 
-        df.loc[df['result'] >= 3, 'result'] = 0
-        df.loc[df['result'] == 2, 'result'] = 1
-
-        df = df.query('result == 1')
-
-        if index == 'distance':
-            table_place_time = pd.pivot_table(df, index=index, values='time', aggfunc='mean')
-
-        table_place_rank3 = pd.pivot_table(df, index=index, values='rank3', aggfunc='mean')
-        table_place_rank4 = pd.pivot_table(df, index=index, values='rank4', aggfunc='mean')
-        table_place_3ftime = pd.pivot_table(df, index=index, values='3ftime', aggfunc='mean')
-        table_place_pop = pd.pivot_table(df, index=index, values='pop', aggfunc='mean')
-        table_place_odds = pd.pivot_table(df, index=index, values='odds', aggfunc='mean')
-
-        table_place = pd.merge(table_place_odds, table_place_pop, on=index, how='left')
-
-        if index == 'distance':
-            table_place = pd.merge(table_place, table_place_time, on=index, how='left')
-            table_place = pd.merge(table_place, table_place_rank3, on=index, how='left')
-            table_place = pd.merge(table_place, table_place_rank4, on=index, how='left')
-            table_place = pd.merge(table_place, table_place_3ftime, on=index, how='left')
-        else:
-            table_place = pd.merge(table_place, table_place_rank3, on=index, how='left')
-            table_place = pd.merge(table_place, table_place_rank4, on=index, how='left')
-            table_place = pd.merge(table_place, table_place_3ftime, on=index, how='left')
-
-        place = pd.DataFrame(table_place)
-        place = place.round(3)
-
-        place = place.add_prefix('{}_'.format(index))
-
-        return place
-
-    @staticmethod
-    def pre_horse_data_process(data, pred_data=None):
-        """
-        :param data: df(preprocessingを通して)いれること。csvデータのまま入れるとエラーがおきる。
-        :param pred_data: 原則Noneにすること(こちらは後日修正を行う。)
-        :return: df(pandas:dataframe)
-        前走の出走データを作成する。これが基本のデータになる。
-        pd.mergeする際はこのデータを中心にmergeすること。
-        """
-        if pred_data is not None:
-            df = pd.concat(data, pred_data)
-        else:
-            df = data
-
-        df['days'] = pd.to_datetime(df['days'])
-        name_days_df = df[["horsename", "days", "pop",
-                           "odds", "rank3", "rank4", "3ftime", "result", 'speedindex']].sort_values(
-            ['horsename', 'days'])
+        name_days_df = df[["horsename", "place", "turf", "distance", "days", "pop", "odds",
+                           "rank3", "rank4", "3ftime", "result", 'speedindex']].sort_values(['horsename', 'days'])
 
         name_list = name_days_df['horsename'].unique()
 
         df_shift_list = []
         df_rolling_list = []
 
-        agg_list = {
-            'speedindex': ['mean', 'max', 'min'],
-            "pop": 'mean',
-            "odds": 'mean',
-            "rank3": 'mean',
-            "rank4": 'mean',
-            "3ftime": 'mean',
-            "result": 'mean',
-        }
-        # 当日のデータは使用できないのでspeedindexは削除する。
         df = df.drop('speedindex', axis=1)
+        # 確率が低くなるのはresultmeanが原因となっている可能性大
+        # →resultで平均をとるとおかしくなったのでtarget以外で特徴量を生成した方がいいかも
 
+        # renamesurukoto
         for name in name_list:
             name_df = name_days_df[name_days_df['horsename'] == name]
-            shift_name_df = name_df[["pop", "odds", "rank3", "rank4", "3ftime", "result", 'speedindex']].shift(1)
-            rolling_name_df = name_df[["pop", "odds", "rank3", "rank4", "3ftime", "result", 'speedindex']].rolling(
-                2).agg \
-                (agg_list)
+            shift_name_df = name_df[["place", "turf", "distance", "pop", "odds", "rank3",
+                                     "rank4", "3ftime", "result", 'speedindex']].shift(1)
+            rolling_name_df = name_df[["pop", "odds", "rank3", "rank4", "3ftime", 'speedindex']].rolling(5, min_periods=2)\
+                .agg(['mean', 'max', 'min'])
             shift_name_df['horsename'] = name
             rolling_name_df['horsename'] = name
 
@@ -275,7 +174,8 @@ class KeibaProcessing:
         df_sh_before['days'] = name_days_df['days']
         df_ro_before['days'] = name_days_df['days']
 
-        df_sh_before = df_sh_before.rename(columns={'pop': 'pre_pop', 'odds': 'pre_odds', 'rank3': 'pre_rank3',
+        df_sh_before = df_sh_before.rename(columns={'place': 'pre_place', 'turf': 'pre_turf', 'distance': 'pre_distance',
+                                                    'pop': 'pre_pop', 'odds': 'pre_odds', 'rank3': 'pre_rank3',
                                                     'rank4': 'pre_rank4', '3ftime': 'pre_3ftime',
                                                     'result': 'pre_result'})
 
@@ -286,59 +186,58 @@ class KeibaProcessing:
 
         return df
 
-    @staticmethod
-    def data_concatenation(main, jockey, father, father_type, place, distance):
+    def formatting_data_process(self):
         """
-        :param main: df(pandas:dataframe) pre_horse_data_processで作成したデータ。
-        :param jockey: df(pandas:dataframe) preprocessingで作成したデータ。
-        :param father: df(pandas:dataframe) father_data_processで作成したデータ。
-        :param father_type: df(pandas:dataframe) father_data_processで作成したデータ。(index='fathertype')
-        :param place: df(pandas:dataframe) place_data_processで作成したデータ。
-        :param distance: df(pandas:dataframe) place_data_processで作成したデータ。(index='distance')
-        :return: df(pandas:dataframe)
-        以下paramsを連結させる。
+        :return:csv_data(encoding:utf_8_sig)
         """
-        df = main
+        df_speed = self.speedindex_data_process()
+        df_jockey = self.jockey_data_process()
+        df_father = self.father_data_process()
+        df_ftype = self.father_data_process(index='fathertype')
 
-        father = father.rename(columns={'father_father': 'father'})
-        father_type = father_type.rename(columns={'fathertype_fathertype': 'fathertype'})
+        df_father = df_father.rename(columns={'father_father': 'father'})
+        df_ftype = df_ftype.rename(columns={'fathertype_fathertype': 'fathertype'})
 
-        df = pd.merge(df, jockey, on='jocky', how='left')
-        df = pd.merge(df, father, on='father', how='left')
-        df = pd.merge(df, father_type, on='fathertype', how='left')
-        df = pd.merge(df, place, on='place', how='left')
-        df = pd.merge(df, distance, on='distance', how='left')
+        main_df = self.df_main
+        main_df = pd.merge(main_df, df_speed, on=['raceid', 'days', 'horsename'], how='left')
+        main_df = pd.merge(main_df, df_jockey, on='jocky', how='left')
+        main_df = pd.merge(main_df, df_father, on='father', how='left')
+        main_df = pd.merge(main_df, df_ftype, on='fathertype', how='left')
 
-        df = df.drop('fathertype_legtype', axis=1)
+        main_df = main_df.dropna(how="any")
 
-        return df
+        main_df = self.pre_race_data_process(main_df)
 
-    @staticmethod
-    def data_feature_and_formating(processed_data, gbmflag=True):
-        """
-        :param processed_data: df(pandas:dataframe)data_concatenationから持ってくること。
-        :param gbmflag: True(default)の場合はLightGBM用にデータに加工される。
-        Falseの場合はtensorflow用データに加工される。
-        :return: df(pandas:dataframe)
-        """
-        df = processed_data
-        df = df.dropna(how="any")
-        df = df.rename(columns={"('speedindex', 'mean')": "speedmean", "('speedindex', 'max')": "speedmax",
-                                "('speedindex', 'min')": "speedmin", "('pop', 'mean')": "popmean",
-                                "('odds', 'mean')": "oddsmean", "('rank4', 'mean')": "rank4mean",
-                                "('rank3', 'mean')": "rank3mean", "('3ftime', 'mean')": "3ftimemean",
-                                "('result', 'mean')": "resultmean", })
-
-        # df = df.drop(["rank4mean", "rank3mean"], axis=1)
-
-        d_ranking = lambda x: 1 if x in [1, 2, 3] else 0
-        df['flag'] = df['result'].map(d_ranking)
+        d_ranking = lambda x: 1 if x in [1, 2] else 0
+        main_df['flag'] = main_df['result'].map(d_ranking)
 
         drop_list = ['rank3', 'rank4', '3ftime', 'time']
-        df = df.drop(drop_list, axis=1)
+        main_df = main_df.drop(drop_list, axis=1)
 
-        cat_cols = ['place', 'class', 'turf', 'distance', 'weather', 'condition', 'sex', 'father', 'mother',
-                    'fathertype', 'fathermon', 'legtype', 'jocky', 'trainer', 'father_legtype']
+        return main_df.to_csv('Keiba/datafile/pred_data/csvdataframe.csv', encoding='utf_8_sig', index=False)
+
+    def add_feature_formatting_process(self, switch=True):
+        """
+        基本的にはこちらの関数を利用すること
+        :param switch: default-True, False is debug mode(machine learning model only)
+        :return: pandas dataframe
+        """
+        if switch:
+            self.formatting_data_process()
+
+        df = pd.read_csv('Keiba/datafile/pred_data/csvdataframe.csv')
+
+        df = df.dropna(how="any")
+        df = df.rename(columns={"('speedindex', 'mean')": "speedmean", "('speedindex', 'max')": "speedmax", "('speedindex', 'min')": "speedmin",
+                                "('pop', 'mean')": "popmean", "('pop', 'max')": "popmax", "('pop', 'min')": "popmin",
+                                "('odds', 'mean')": "oddsmean", "('odds', 'max')": "oddsmax", "('odds', 'min')": "oddsmin",
+                                "('rank3', 'mean')": "rank3mean", "('rank3', 'max')": "rank3max", "('rank3', 'min')": "rank3min",
+                                "('rank4', 'mean')": "rank4mean", "('rank4', 'max')": "rank4max", "('rank4', 'min')": "rank4min",
+                                "('3ftime', 'mean')": "3ftimemean", "('3ftime', 'max')": "3ftimemax", "('3ftime', 'min')": "3ftimemin",
+                                })
+
+        drop_list = ["rank3max", "rank3min", "rank4max", "rank4min"]
+        df = df.drop(drop_list, axis=1)
 
         # 　特徴量生成
         df['odds_hi'] = (df['odds'] / df['pop'])
@@ -347,73 +246,22 @@ class KeibaProcessing:
         df['re_odds_hi*2'] = df['re_odds_hi'] ** 2
         df['re_3_to_4time'] = (df['pre_rank4'] - df['pre_rank3'])
         df['re_3_to_4time_hi*2'] = (df['pre_rank4'] / df['pre_rank3']) ** 2
-        df['father_3f_to_my'] = (df['father_3ftime'] - df['pre_3ftime'])
-        df['fathertype_3f_to_my'] = (df['fathertype_3ftime'] - df['pre_3ftime'])
         df['re_pop_now_pop'] = (df['pre_pop'] - df['pop'])
         df['re_odds_now_odds'] = (df['pre_odds'] - df['odds'])
         df['re_result_to_pop'] = (df['pre_result'] - df['pre_pop'])
+        df['speedmax_speedmin'] = df['speedmax'] - df['speedmin']
+        df['popmax_popmin'] = df['popmax'] - df['popmin']
+        df['oddsmax_oddsmin'] = df['oddsmax'] - df['oddsmin']
+        df['3ftimemax_3ftimemin'] = df['3ftimemax'] - df['3ftimemin']
 
         feature_list = ['odds_hi', 're_odds_hi', 'odds_hi*2', 're_odds_hi*2', 're_3_to_4time', 're_3_to_4time_hi*2',
-                        'father_3f_to_my', 'fathertype_3f_to_my', 're_pop_now_pop', 're_odds_now_odds',
-                        're_result_to_pop']
-
-        # feature_list = ['odds_hi', 'odds_hi*2']
+                        're_pop_now_pop', 're_odds_now_odds', 're_result_to_pop', 'speedmax_speedmin', 'popmax_popmin',
+                        'popmax_popmin', 'oddsmax_oddsmin', '3ftimemax_3ftimemin']
 
         for feature in feature_list:
             df[feature] = df[feature].replace([np.inf, -np.inf], np.nan)
             df[feature] = df[feature].fillna(0)
 
-        if gbmflag:
-            for c in cat_cols:
-                le = LabelEncoder()
-                le.fit(df[c])
-                df[c] = le.transform(df[c])
-        else:
-            previous_list = datalist.re_rename_list
-            after_list = datalist.rename_list
-            for i in range(len(previous_list)):
-                df = df.rename(columns={previous_list[i]: after_list[i]})
-
-            num_data = datalist.num_datas
-            # test時はhorsenumをコメントアウトすること
-            num_data.remove('horsenum')
-            num_data.remove('speedindex')
-
-            scaler = StandardScaler()
-            sc = scaler.fit(df[num_data])
-
-            scalered_df = pd.DataFrame(sc.transform(df[num_data]), columns=num_data, index=df.index)
-            df.update(scalered_df)
-
         return df
 
-    @staticmethod
-    def df_to_tfdata(df_data):
-        """
-        :param df_data: df(pandas:dataframe)data_feature_and_formatingから持ってくること。
-        :return: featuer_layer(tensorflow用)
-        tensorflow用に特徴量のデータ加工を行う。
-        """
-        df = df_data
 
-        feature_columns = []
-
-        num_data = datalist.num_datas
-
-        for header in num_data:
-            feature_columns.append(feature_column.numeric_column(header))
-
-        horsenum = feature_column.numeric_column('horsenum')
-        horsenum_buckets = feature_column.bucketized_column(horsenum, [2, 4, 6, 8, 10, 12, 14, 16, 18])
-        feature_columns.append(horsenum_buckets)
-
-        cat_data = ['place', 'class', 'turf', 'weather', 'condition', 'sex', 'father', 'mother', 'fathermon',
-                    'fathertype', 'legtype', 'jocky', 'trainer']
-
-        for cat in cat_data:
-            category = feature_column.categorical_column_with_vocabulary_list(cat, list(df[cat].unique()))
-            feature_columns.append(feature_column.embedding_column(category, dimension=8))
-
-        feature_layer = tf.keras.layers.DenseFeatures(feature_columns)
-
-        return feature_layer
