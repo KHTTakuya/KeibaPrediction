@@ -100,5 +100,7 @@ flag=Falseにすると前処理が省略されてモデルの予想からにな�
 
 Qiita ：https://qiita.com/KHTTakuya/items/35ea5e710f0fb3aa86e4
 
+予想サイト【Proheter】　: https://django-keiba-site.herokuapp.com/
+
 
 
