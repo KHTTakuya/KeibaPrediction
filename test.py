@@ -21,5 +21,8 @@ def combine(data):
 if __name__ == '__main__':
     warnings.simplefilter('ignore')
     main_data = 'Keiba/datafile/main.csv'
-    df = combine(main_data)
-    print(df)
+    start = TestDataProcess(main_data)
+    df = start.add_feature_formatting_process()
+    print(df.to_csv('gettestcsv.csv', encoding='utf_8_sig'))
+    # df = combine(main_data)
+    # print(df)

@@ -332,4 +332,4 @@ class MergeModelDataToCsv:
 
         df['new_flag'].mask(((df['gbm_pred'] * 0.45) + (df['tf_pred'] * 0.55)) >= 0.5, 1, inplace=True)
 
-        return df.to_csv('ans.csv', encoding='utf_8_sig')
+        return df.to_csv('ans1.csv', encoding='utf_8_sig')
