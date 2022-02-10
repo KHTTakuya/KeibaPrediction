@@ -1,3 +1,5 @@
+import dask.dataframe as dd
+import gc
 import time
 import pandas as pd
 import numpy as np
@@ -47,6 +49,36 @@ class TestDataProcess:
 
         self.df = df
         self.df_main = df_main
+
+    @staticmethod
+    def reduce_mem_usage(df, verbose=True):
+        numerics = ['int16', 'int32', 'int64', 'float16', 'float32', 'float64']
+        start_mem = df.memory_usage().sum() / 1024 ** 2
+        for col in df.columns:
+            col_type = df[col].dtypes
+            if col_type in numerics:
+                c_min = df[col].min()
+                c_max = df[col].max()
+                if str(col_type)[:3] == 'int':
+                    if c_min > np.iinfo(np.int8).min and c_max < np.iinfo(np.int8).max:
+                        df[col] = df[col].astype(np.int8)
+                    elif c_min > np.iinfo(np.int16).min and c_max < np.iinfo(np.int16).max:
+                        df[col] = df[col].astype(np.int16)
+                    elif c_min > np.iinfo(np.int32).min and c_max < np.iinfo(np.int32).max:
+                        df[col] = df[col].astype(np.int32)
+                    elif c_min > np.iinfo(np.int64).min and c_max < np.iinfo(np.int64).max:
+                        df[col] = df[col].astype(np.int64)
+                else:
+                    if c_min > np.finfo(np.float16).min and c_max < np.finfo(np.float16).max:
+                        df[col] = df[col].astype(np.float16)
+                    elif c_min > np.finfo(np.float32).min and c_max < np.finfo(np.float32).max:
+                        df[col] = df[col].astype(np.float32)
+                    else:
+                        df[col] = df[col].astype(np.float64)
+        end_mem = df.memory_usage().sum() / 1024 ** 2
+        if verbose: print('Mem. usage decreased to {:5.2f} Mb ({:.1f}% reduction)'.format(end_mem, 100 * (
+                    start_mem - end_mem) / start_mem))
+        return df
 
     def speedindex_data_process(self):
         df_start = self.df
@@ -127,7 +159,7 @@ class TestDataProcess:
         df_score = df_score.loc[:, :5]
         df_score = pd.DataFrame(data=df_score)
         df_score = df_score.rename(columns={0: 'jockey_pca1', 1: 'jockey_pca2', 2: 'jockey_pca3',
-                                            3: 'jockey_pca4', 4: 'jockey_pca4', 5: 'jockey_pca5'})
+                                            3: 'jockey_pca4', 4: 'jockey_pca5', 5: 'jockey_pca6'})
 
         # TargetEncoding：HoldOut
         df_jockey = df[['jocky', 'result']]
@@ -141,8 +173,8 @@ class TestDataProcess:
             holdout_agg_df = holdout_df.groupby('jocky').agg({'result': ['sum', 'count']})
             train_agg_df = agg_df - holdout_agg_df
             oof_ts = holdout_df.apply(
-                lambda row: train_agg_df.loc[row.jocky][('result', 'sum')] / train_agg_df.loc[row.jocky][
-                    ('result', 'count')], axis=1)
+                lambda row: train_agg_df.loc[row.jocky][('result', 'sum')] / (train_agg_df.loc[row.jocky][
+                    ('result', 'count')]+ 1), axis=1)
             ts[oof_ts.index] = oof_ts
 
         ts.name = 'holdout_ts_jockey'
@@ -150,9 +182,20 @@ class TestDataProcess:
         df_jockey = df_jockey.drop('result', axis=1)
 
         df_jockey = pd.merge(df_jockey, df_score, how='left', on='jocky')
-        df_jockey = df_jockey.round(3).astype('float32')
 
-        return df_jockey
+
+        cols = ['jockey_pca1', 'jockey_pca2', 'jockey_pca3',
+                  'jockey_pca4', 'jockey_pca5', 'jockey_pca6', 'holdout_ts_jockey']
+
+        df_jockey[cols] = df_jockey[cols].astype('float32')
+
+        del df_start, df, df_score, table_jockey, ts, holdout_df, holdout_agg_df, agg_df, train_agg_df, oof_ts
+        gc.collect()
+
+        df_new = df_jockey.groupby('jocky').agg('mean')
+        df_new = df_new.round(3)
+
+        return df_new
 
     def father_data_process(self, index='father'):
         df_start = self.df
@@ -194,6 +237,10 @@ class TestDataProcess:
         df_score = df_score.loc[:, :8]
         df_score = pd.DataFrame(data=df_score)
 
+        df_score = df_score.rename(columns={0: 'father_pca1', 1: 'father_pca2', 2: 'father_pca3', 3:'father_pca4',
+                                            4: 'father_pca5', 5: 'father_pca6', 6: 'father_pca7', 7: 'father_pca8',
+                                            8: 'father_pca9'})
+
         # TargetEncoding：HoldOut
         df_father = df[['father', 'result']]
         agg_df = df_father.groupby('father').agg({'result': ['sum', 'count']})
@@ -206,8 +253,8 @@ class TestDataProcess:
             holdout_agg_df = holdout_df.groupby('father').agg({'result': ['sum', 'count']})
             train_agg_df = agg_df - holdout_agg_df
             oof_ts = holdout_df.apply(
-                lambda row: train_agg_df.loc[row.father][('result', 'sum')] / train_agg_df.loc[row.father][
-                    ('result', 'count')], axis=1)
+                lambda row: train_agg_df.loc[row.father][('result', 'sum')] / (train_agg_df.loc[row.father][
+                    ('result', 'count')]+ 1), axis=1)
             ts[oof_ts.index] = oof_ts
 
         ts.name = 'holdout_ts_father'
@@ -215,9 +262,19 @@ class TestDataProcess:
         df_father = df_father.drop('result', axis=1)
 
         df_father = pd.merge(df_father, df_score, how='left', on='father')
-        df_father = df_father.round(3).astype('float32')
 
-        return df_father
+        cols = ['father_pca1', 'father_pca2', 'father_pca3', 'father_pca4', 'father_pca5', 'father_pca6',
+                'father_pca7', 'father_pca8', 'father_pca9', 'holdout_ts_father']
+
+        df_father[cols] = df_father[cols].astype('float32')
+
+        del df_start, df,df_score, table_father, ts, holdout_df, holdout_agg_df, agg_df, train_agg_df, oof_ts
+        gc.collect()
+
+        df_new = df_father.groupby('father').agg('mean')
+        df_new = df_new.round(3)
+
+        return df_new
 
     @staticmethod
     def pre_race_data_process(dataframe):
@@ -276,36 +333,55 @@ class TestDataProcess:
         main_df = pd.merge(main_df, df_lastrace, on=['raceid', 'days', 'horsename'], how='left')
 
         main_df = main_df.dropna(how="any")
+        del df_speed
+        del df_lastrace
+        gc.collect()
         print("終了")
-        time.sleep(20)
+        time.sleep(10)
 
         print('長距離開始')
         main_df = self.pre_race_data_process(main_df)
+        main_df = self.reduce_mem_usage(main_df)
         print("終了")
-        time.sleep(20)
+        time.sleep(10)
 
         print("データ入力スタート")
         d_ranking = lambda x: 1 if x in [1, 2] else 0
         main_df['flag'] = main_df['result'].map(d_ranking)
 
         drop_list = ['rank3', 'rank4', '3ftime', 'time']
+        main_df = main_df.drop(drop_list, axis=1)
+
+        del d_ranking
+        gc.collect()
+
+        print("終了")
+        print("データマージスタート")
+        print("騎手データマージ")
 
         df_jockey = self.jockey_data_process()
-        main_df = main_df.drop(drop_list, axis=1)
-        df_father = self.father_data_process()
-        print("終了")
-        time.sleep(20)
+        df_jockey = pd.DataFrame(df_jockey)
+        df_jockey = self.reduce_mem_usage(df_jockey)
 
-        print("データマージスタート")
-        df_jockeies = np.array_split(df_jockey, 100)
-        df_fatheres = np.array_split(df_father, 100)
+        main_df = dd.merge(main_df, df_jockey, on='jocky', how='left')
+
+        del df_jockey
+        gc.collect()
+
+        print("終了")
+        time.sleep(10)
+        print("父馬データマージ")
+
+        df_father = self.father_data_process()
+        df_father = pd.DataFrame(df_father)
+        df_father = self.reduce_mem_usage(df_father)
 
         df_father = df_father.rename(columns={'father_father': 'father'})
+        main_df = dd.merge(main_df, df_father, on='father', how='left')
 
-        main_df = pd.merge(main_df, df_jockeies, on='jocky', how='left')
-        main_df = pd.merge(main_df, df_fatheres, on='father', how='left')
+        del df_father
+        gc.collect()
         print("終了")
-        time.sleep(20)
 
         return main_df.to_csv('Keiba/datafile/pred_data/testcsvdataframe.csv', encoding='utf_8_sig', index=False)
 
@@ -321,9 +397,6 @@ class TestDataProcess:
                                 "('odds', 'mean')": "oddsmean", "('odds', 'max')": "oddsmax", "('odds', 'min')": "oddsmin",
                                 "('3ftime', 'mean')": "3ftimemean", "('3ftime', 'max')": "3ftimemax", "('3ftime', 'min')": "3ftimemin",
                                 })
-
-        drop_list = ["rank3max", "rank3min", "rank4max", "rank4min"]
-        df = df.drop(drop_list, axis=1)
 
         # 　特徴量生成
         df['odds_hi'] = (df['odds'] / df['pop'])

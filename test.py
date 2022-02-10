@@ -23,6 +23,6 @@ if __name__ == '__main__':
     main_data = 'Keiba/datafile/main.csv'
     start = TestDataProcess(main_data)
     df = start.add_feature_formatting_process()
-    print(df.to_csv('gettestcsv.csv', encoding='utf_8_sig'))
+    print(df)
     # df = combine(main_data)
     # print(df)
