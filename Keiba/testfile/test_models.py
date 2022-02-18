@@ -1,3 +1,4 @@
+import gc
 import tensorflow as tf
 from imblearn.over_sampling import SMOTE
 from tensorflow import keras
@@ -12,19 +13,16 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 
-from Keiba.datafile import datalist
-
 
 class TestPredictionModelGBM:
 
     def __init__(self, dataframe):
         df = dataframe
 
-        df = df.astype({'distance': 'string'})
+        df = df.astype({'distance': 'string', 'pre_distance': 'string'})
 
-        cat_cols = ['place', 'class', 'turf', 'distance', 'weather', 'condition', 'sex', 'father', 'mother',
-                    'fathertype', 'fathermon', 'legtype', 'jocky', 'trainer', 'father_legtype', 'pre_place',
-                    'pre_turf', 'pre_distance']
+        cat_cols = ['place', 'turf', 'distance', 'weather', 'condition', 'sex',
+                    'horsename', 'trainer', 'pre_place', 'pre_turf', 'pre_distance']
 
         for c in cat_cols:
             le = LabelEncoder()
@@ -34,12 +32,15 @@ class TestPredictionModelGBM:
         df['days'] = pd.to_datetime(df['days'])
         df = df.dropna(how='any')
 
+        drop_list = ['days', 'raceid', 'result', 'racenum', 'class', 'jocky', 'horsecount',
+                     'weight', 'father', 'mother', 'fathertype', 'legtype', 'fathermon']
+
         df_pred = df[df['result'] == 999]
-        df_pred_drop = df_pred.drop(
-            ['odds', 'pop', 'flag', 'days', 'horsename', 'raceid', 'result', 'fathertype_legtype'], axis=1)
+        df_pred_drop = df_pred.drop(drop_list, axis=1)
+        df_pred_drop = df_pred_drop.drop('flag', axis=1)
 
         df = df[df['result'] != 999]
-        df = df.drop(['odds', 'pop', 'days', 'horsename', 'raceid', 'result', 'fathertype_legtype'], axis=1)
+        df = df.drop(drop_list, axis=1)
 
         self.df = df
         self.df_pred = df_pred
@@ -57,8 +58,10 @@ class TestPredictionModelGBM:
                                                             stratify=train_y,
                                                             random_state=0, test_size=0.3, shuffle=True)
 
-        cat_cols = ['place', 'class', 'turf', 'distance', 'weather', 'condition', 'sex', 'father', 'mother',
-                    'fathertype', 'fathermon', 'legtype', 'jocky', 'trainer']
+        cat_cols = ['place', 'turf', 'distance', 'weather', 'condition', 'sex',
+                    'horsename', 'trainer', 'pre_place', 'pre_turf', 'pre_distance']
+        # cat_cols = ['place', 'turf', 'distance', 'weather', 'condition', 'sex',
+        #             'horsename', 'trainer']
 
         sm = SMOTE()
         x_resampled, y_resampled = sm.fit_resample(X_train, y_train)
@@ -77,8 +80,8 @@ class TestPredictionModelGBM:
             lgb_train,
             categorical_feature=cat_cols,
             valid_sets=lgb_eval,
-            num_boost_round=100,
-            early_stopping_rounds=20,
+            num_boost_round=50,
+            early_stopping_rounds=10,
         )
         best_params = model.params
 
@@ -87,8 +90,8 @@ class TestPredictionModelGBM:
             lgb_train,
             categorical_feature=cat_cols,
             valid_sets=lgb_eval,
-            num_boost_round=100,  # 100
-            early_stopping_rounds=20,  # 20
+            num_boost_round=50,  # 100
+            early_stopping_rounds=10,  # 20
         )
 
         predict_proba = model.predict(df_pred_drop, num_iteration=model.best_iteration)
@@ -112,36 +115,21 @@ class TestPredictModelTF:
     def __init__(self, dataframe):
         df = dataframe
 
-        df['flag_konkan'] = (df['distance'] % 400 == 0).astype(int)
+        df = df.replace({'distance': [1000, 1200, 1400, 1500]}, 'sprint')
+        df = df.replace({'distance': [1600, 1700, 1800]}, 'mile')
+        df = df.replace({'distance': [2000, 2200, 2300, 2400]}, 'middle')
+        df = df.replace({'distance': [2500, 2600, 3000, 3200, 3400, 3600]}, 'stayer')
 
-        df = df.replace({'distance': [1000, 1200, 1400, 1500]}, '短距離')
-        df = df.replace({'distance': [1600, 1700, 1800]}, 'マイル')
-        df = df.replace({'distance': [2000, 2200, 2300, 2400]}, '中距離')
-        df = df.replace({'distance': [2500, 2600, 3000, 3200, 3400, 3600]}, '長距離')
-
-        df['flag_pre_konkan'] = (df['pre_distance'] % 400 == 0).astype(int)
+        df = df.replace({'pre_distance': [1000, 1200, 1400, 1500]}, 'sprint')
+        df = df.replace({'pre_distance': [1600, 1700, 1800]}, 'mile')
+        df = df.replace({'pre_distance': [2000, 2200, 2300, 2400]}, 'middle')
+        df = df.replace({'pre_distance': [2500, 2600, 3000, 3200, 3400, 3600]}, 'stayer')
 
         columns_list = ['place', 'class', 'turf', 'weather', 'distance',
-                        'condition', 'sex', 'pre_place', 'pre_turf']
+                        'condition', 'sex', 'pre_place', 'pre_turf', 'pre_distance']
 
         df = pd.get_dummies(df, columns=columns_list)
-        df = df.drop(['pop', 'father', 'mother', 'fathermon', 'fathertype', 'legtype', 'jocky',
-                      'trainer', 'father_legtype', 'fathertype_legtype', 'pre_distance'], axis=1)
-
-        previous_list = datalist.re_rename_list
-        after_list = datalist.rename_list
-        for i in range(len(previous_list)):
-            df = df.rename(columns={previous_list[i]: after_list[i]})
-
-        num_data = datalist.new_num_data
-
-        num_data.remove('horsenum')
-
-        scaler = StandardScaler()
-        sc = scaler.fit(df[num_data])
-
-        scalered_df = pd.DataFrame(sc.transform(df[num_data]), columns=num_data, index=df.index)
-        df.update(scalered_df)
+        df = df.drop(['father', 'mother', 'fathermon', 'fathertype', 'legtype', 'jocky', 'trainer'], axis=1)
 
         df['days'] = pd.to_datetime(df['days'])
         df = df.dropna(how='any')
@@ -156,7 +144,6 @@ class TestPredictModelTF:
         self.pred_df = df_pred_droped
 
     def models(self):
-
         df = self.df
         pred_df = self.pred_df
         predictions_df = pred_df.drop('raceid', axis=1)
@@ -218,15 +205,37 @@ class TestPredictModelTF:
                 output_bias = tf.keras.initializers.Constant(output_bias)
             model = keras.Sequential([
                 keras.layers.Dense(
+                    256, activation='relu',
+                    input_shape=(train_features.shape[-1],)),
+                keras.layers.Dense(
                     128, activation='relu',
                     input_shape=(train_features.shape[-1],)),
-                keras.layers.Dropout(0.1),
                 keras.layers.Dense(
                     128, activation='relu',
                     input_shape=(train_features.shape[-1],)),
                 keras.layers.Dropout(0.1),
                 keras.layers.Dense(
+                    256, activation='relu',
+                    input_shape=(train_features.shape[-1],)),
+                keras.layers.Dense(
                     128, activation='relu',
+                    input_shape=(train_features.shape[-1],)),
+                keras.layers.Dense(
+                    128, activation='relu',
+                    input_shape=(train_features.shape[-1],)),
+                keras.layers.Dropout(0.1),
+                keras.layers.Dense(
+                    256, activation='relu',
+                    input_shape=(train_features.shape[-1],)),
+                keras.layers.Dense(
+                    128, activation='relu',
+                    input_shape=(train_features.shape[-1],)),
+                keras.layers.Dense(
+                    128, activation='relu',
+                    input_shape=(train_features.shape[-1],)),
+                keras.layers.Dropout(0.1),
+                keras.layers.Dense(
+                    256, activation='relu',
                     input_shape=(train_features.shape[-1],)),
                 keras.layers.Dense(1, activation='sigmoid',
                                    bias_initializer=output_bias),
@@ -281,14 +290,6 @@ class TestPredictModelTF:
         predictions = weighted_model.predict(pred_features)
         predict = [float(i) for i in predictions]
 
-        count = 0
-        for i in range(len(predict)):
-            if predict[i] >= 0.2:
-                count += 1
-
-        if count <= (len(predict) / 2):
-            self.models()
-
         d = {
             "raceid": pred_df['raceid'],
             "tf_pred": predict
@@ -304,7 +305,8 @@ class TestMergeModelDataToCsv:
     def __init__(self, main_data, gbm_data, tf_data):
         df = main_data
         df = df[df['result'] == 999]
-        df = df[['raceid', 'place', 'class', 'distance', 'horsename', 'jocky', 'speedindex', 'speedmean']]
+        df = df[['raceid', 'place', 'class', 'distance', 'horsename', 'jocky',
+                 'racenum', 'horsecount', 'speedindex', 'last_race_index']]
 
         self.df = df
         self.gbm_data = gbm_data
@@ -319,18 +321,9 @@ class TestMergeModelDataToCsv:
         df['tf_pred'] = df['tf_pred'].astype(float)
 
         # gbm_pred, tf_pred
-        df['new_mark_flag'] = '×'
-        df['new_flag'] = 0
-        df['probability'] = (((df['gbm_pred'] * 0.45) + (df['tf_pred'] * 0.55)) * 100).round(2)
-
-        # # 0.5が2個以上のフラグ作成。〇
-        df['new_mark_flag'].mask((df['gbm_pred'] >= 0.5) | (df['tf_pred'] >= 0.5), '〇', inplace=True)
-
-        # 0.5が3個以上のフラグ作成。◎
-        df['new_mark_flag'].mask((df['gbm_pred'] >= 0.5) & (df['tf_pred'] >= 0.5), '◎', inplace=True)
-
-        df['new_flag'].mask(((df['gbm_pred'] * 0.45) + (df['tf_pred'] * 0.55)) >= 0.5, 1, inplace=True)
+        df['probability'] = ((df['gbm_pred'] * 0.45) + (df['tf_pred'] * 0.55)).round(2)
 
         df = df.drop_duplicates(subset=['raceid', 'horsename'])
+        df = df.drop(['gbm_pred', 'tf_pred'], axis=1)
 
         return df.to_csv('ans.csv', encoding='utf_8_sig')

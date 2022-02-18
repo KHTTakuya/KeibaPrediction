@@ -7,7 +7,7 @@ from Keiba.testfile.test_models import TestPredictionModelGBM, TestPredictModelT
 
 def combine(data):
     start = TestDataProcess(data)
-    df = start.add_feature_formatting_process(switch=False)
+    df = start.add_feature_formatting_process()
     df_new = df.copy()
     df_tnf = df.copy()
     gbm_model = TestPredictionModelGBM(df).model()
@@ -21,8 +21,5 @@ def combine(data):
 if __name__ == '__main__':
     warnings.simplefilter('ignore')
     main_data = 'Keiba/datafile/main.csv'
-    start = TestDataProcess(main_data)
-    df = start.add_feature_formatting_process()
+    df = combine(main_data)
     print(df)
-    # df = combine(main_data)
-    # print(df)

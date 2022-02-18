@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from sklearn.decomposition import PCA
+from sklearn.impute import SimpleImputer
 from sklearn.model_selection import StratifiedKFold
 
 """
@@ -30,7 +31,6 @@ class TestDataProcess:
 
         # １部欠損値補完・除外
         df = df[~df['result'].isin([0])]
-        df = df.drop('basetime', axis=1)
 
         df = df.replace({"class": {"1勝": "500万", "2勝": "1000万", "3勝": "1600万"}})
         df = df.fillna({'fathertype': 'その他のエクリプス系'})
@@ -138,12 +138,12 @@ class TestDataProcess:
     def jockey_data_process(self):
         df_start = self.df
         df = df_start.copy()
-        df = df[df['days'] < datetime(2021, 5, 31)]
+        df = df[df['days'] < datetime(2021, 1, 1)]
 
-        df.loc[df['result'] >= 3, 'result'] = 0
-        df.loc[df['result'] >= 2, 'result'] = 1
+        df.loc[df['result'] >= 4, 'result'] = 0
+        df.loc[(df['result'] <= 3) & (df['result'] >= 1), 'result'] = 1
 
-        # 各ジョッキーの連対率（2021年5月31日まで集計対象）
+        # 各ジョッキーの連対率（2021年1月1日まで集計対象）
         table_jockey = pd.pivot_table(df, index='jocky', columns='place', values='result', aggfunc='mean', dropna=False)
         table_jockey = table_jockey.fillna(0)
 
@@ -187,7 +187,6 @@ class TestDataProcess:
         cols = ['jockey_pca1', 'jockey_pca2', 'jockey_pca3',
                   'jockey_pca4', 'jockey_pca5', 'jockey_pca6', 'holdout_ts_jockey']
 
-        df_jockey[cols] = df_jockey[cols].astype('float32')
 
         del df_start, df, df_score, table_jockey, ts, holdout_df, holdout_agg_df, agg_df, train_agg_df, oof_ts
         gc.collect()
@@ -200,10 +199,10 @@ class TestDataProcess:
     def father_data_process(self, index='father'):
         df_start = self.df
         df = df_start.copy()
-        df = df[df['days'] < datetime(2021, 5, 31)]
+        df = df[df['days'] < datetime(2021, 1, 1)]
 
-        df.loc[df['result'] >= 3, 'result'] = 0
-        df.loc[df['result'] >= 2, 'result'] = 1
+        df.loc[df['result'] >= 4, 'result'] = 0
+        df.loc[(df['result'] <= 3) & (df['result'] >= 1), 'result'] = 1
 
         # fatherの連結対象(レース場成績、距離、芝ダート、重馬場成績)（2021年5月31日まで集計対象）
         table_father_place = pd.pivot_table(df, index=index, columns='place', values='result', aggfunc='mean',
@@ -266,8 +265,6 @@ class TestDataProcess:
         cols = ['father_pca1', 'father_pca2', 'father_pca3', 'father_pca4', 'father_pca5', 'father_pca6',
                 'father_pca7', 'father_pca8', 'father_pca9', 'holdout_ts_father']
 
-        df_father[cols] = df_father[cols].astype('float32')
-
         del df_start, df,df_score, table_father, ts, holdout_df, holdout_agg_df, agg_df, train_agg_df, oof_ts
         gc.collect()
 
@@ -276,29 +273,120 @@ class TestDataProcess:
 
         return df_new
 
+    def fathermon_data_process(self, index='fathermon'):
+        df_start = self.df
+        df = df_start.copy()
+        df = df[df['days'] < datetime(2021, 1, 1)]
+
+        df.loc[df['result'] >= 4, 'result'] = 0
+        df.loc[(df['result'] <= 3) & (df['result'] >= 1), 'result'] = 1
+
+        # fatherの連結対象(レース場成績、距離、芝ダート、重馬場成績)（2021年5月31日まで集計対象）
+        table_father_place = pd.pivot_table(df, index=index, columns='place', values='result', aggfunc='mean',
+                                            dropna=False)
+        table_father_distance = pd.pivot_table(df, index=index, columns='distance', values='result', aggfunc='mean',
+                                               dropna=False)
+        table_father_turf = pd.pivot_table(df, index=index, columns='turf', values='result', aggfunc='mean',
+                                           dropna=False)
+        table_father_condition = pd.pivot_table(df, index=index, columns='condition', values='result', aggfunc='mean',
+                                                dropna=False)
+
+        table_father = pd.merge(table_father_place, table_father_distance, on=index, how='left')
+        table_father = pd.merge(table_father, table_father_turf, on=index, how='left')
+        table_father = pd.merge(table_father, table_father_condition, on=index, how='left')
+
+        table_father1 = table_father.fillna(0)
+
+        time_3f = df.groupby(index).mean()['3ftime']
+        time3f = pd.DataFrame(time_3f)
+
+        father = pd.merge(table_father1, time3f, on=index, how='left')
+
+        father = father.round(3)
+        father = father.add_prefix('{}_'.format(index))
+
+        # 主成分分析：次元削除
+        pca = PCA()
+        pca.fit(father)
+        df_score = pd.DataFrame(pca.transform(father), index=father.index)
+
+        df_score = df_score.loc[:, :12]
+        df_score = pd.DataFrame(data=df_score)
+
+        df_score = df_score.rename(columns={0: 'fathermon_pca1', 1: 'fathermon_pca2', 2: 'fathermon_pca3', 3: 'fathermon_pca4',
+                                            4: 'fathermon_pca5', 5: 'fathermon_pca6', 6: 'fathermon_pca7', 7: 'fathermon_pca8',
+                                            8: 'fathermon_pca9', 9: 'fathermon_pca10', 10: 'fathermon_pca11', 11: 'fathermon_pca12',
+                                            12: 'fathermon_pca13'})
+
+        # TargetEncoding：HoldOut
+        df_father = df[['fathermon', 'result']]
+        agg_df = df_father.groupby('fathermon').agg({'result': ['sum', 'count']})
+
+        folds = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        ts = pd.Series(np.empty(df_father.shape[0]), index=df_father.index)
+
+        for _, holdout_idx in folds.split(df_father, df_father.result):
+            holdout_df = df_father.iloc[holdout_idx]
+            holdout_agg_df = holdout_df.groupby('fathermon').agg({'result': ['sum', 'count']})
+            train_agg_df = agg_df - holdout_agg_df
+            oof_ts = holdout_df.apply(
+                lambda row: train_agg_df.loc[row.fathermon][('result', 'sum')] / (train_agg_df.loc[row.fathermon][
+                    ('result', 'count')]+ 1), axis=1)
+            ts[oof_ts.index] = oof_ts
+
+        ts.name = 'holdout_ts_fathermon'
+        df_father = df_father.join(ts)
+        df_father = df_father.drop('result', axis=1)
+
+        df_father = pd.merge(df_father, df_score, how='left', on='fathermon')
+
+        cols = ['fathermon_pca1', 'fathermon_pca2', 'fathermon_pca3', 'fathermon_pca4', 'fathermon_pca5', 'fathermon_pca6',
+                'fathermon_pca7', 'fathermon_pca8', 'fathermon_pca9', 'fathermon_pca10', 'fathermon_pca11', 'fathermon_pca12',
+                'fathermon_pca13', 'holdout_ts_fathermon']
+
+        df_father[cols] = df_father[cols].astype('float32')
+
+        del df_start, df,df_score, table_father, ts, holdout_df, holdout_agg_df, agg_df, train_agg_df, oof_ts
+        gc.collect()
+
+        df_new = df_father.groupby('fathermon').agg('mean')
+        df_new = df_new.round(3)
+
+        return df_new
+
     @staticmethod
     def pre_race_data_process(dataframe):
         df = dataframe
+        df['count'] = 1
+        df['rentai'] = (df['result'] <= 3).astype(int)
 
         name_days_df = df[["horsename", "place", "turf", "distance", "days", "pop", "odds",
-                           "rank3", "rank4", "3ftime", "result", 'speedindex', 'last_race_index']].sort_values(['horsename', 'days'])
+                           "rank3", "rank4", "3ftime", "result", 'speedindex', 'last_race_index', 'count', 'rentai']].sort_values(['horsename', 'days'])
 
         name_list = name_days_df['horsename'].unique()
 
         df_shift_list = []
         df_rolling_list = []
 
-        df = df.drop('speedindex', axis=1)
+        df = df.drop(['speedindex', 'last_race_index'], axis=1)
         # 確率が低くなるのはresultmeanが原因となっている可能性大
         # →resultで平均をとるとおかしくなったのでtarget以外で特徴量を生成した方がいいかも
+        agg_list = {
+            "pop": ['mean', 'max', 'min'],
+            "odds": ['mean', 'max', 'min'],
+            "3ftime": ['min'],
+            "speedindex": ['max'],
+            "count": ['sum'],
+            "rentai": ['sum'],
+        }
 
         # renamesurukoto
         for name in name_list:
             name_df = name_days_df[name_days_df['horsename'] == name]
             shift_name_df = name_df[["place", "turf", "distance", "pop", "odds", "rank3",
                                      "rank4", "3ftime", "result", 'speedindex', 'last_race_index']].shift(1)
-            rolling_name_df = name_df[["pop", "odds", "3ftime", 'speedindex']].rolling(5, min_periods=2)\
-                .agg(['mean', 'max', 'min'])
+            rolling_name_df = name_df[["pop", "odds", "3ftime", 'speedindex', 'count', 'rentai']].rolling(5, min_periods=2)\
+                .agg(agg_list)
             shift_name_df['horsename'] = name
             rolling_name_df['horsename'] = name
 
@@ -332,7 +420,6 @@ class TestDataProcess:
         main_df = pd.merge(main_df, df_speed, on=['raceid', 'days', 'horsename'], how='left')
         main_df = pd.merge(main_df, df_lastrace, on=['raceid', 'days', 'horsename'], how='left')
 
-        main_df = main_df.dropna(how="any")
         del df_speed
         del df_lastrace
         gc.collect()
@@ -346,7 +433,7 @@ class TestDataProcess:
         time.sleep(10)
 
         print("データ入力スタート")
-        d_ranking = lambda x: 1 if x in [1, 2] else 0
+        d_ranking = lambda x: 1 if x in [1, 2, 3] else 0
         main_df['flag'] = main_df['result'].map(d_ranking)
 
         drop_list = ['rank3', 'rank4', '3ftime', 'time']
@@ -360,8 +447,6 @@ class TestDataProcess:
         print("騎手データマージ")
 
         df_jockey = self.jockey_data_process()
-        df_jockey = pd.DataFrame(df_jockey)
-        df_jockey = self.reduce_mem_usage(df_jockey)
 
         main_df = dd.merge(main_df, df_jockey, on='jocky', how='left')
 
@@ -370,11 +455,10 @@ class TestDataProcess:
 
         print("終了")
         time.sleep(10)
+
         print("父馬データマージ")
 
         df_father = self.father_data_process()
-        df_father = pd.DataFrame(df_father)
-        df_father = self.reduce_mem_usage(df_father)
 
         df_father = df_father.rename(columns={'father_father': 'father'})
         main_df = dd.merge(main_df, df_father, on='father', how='left')
@@ -382,6 +466,17 @@ class TestDataProcess:
         del df_father
         gc.collect()
         print("終了")
+
+        print("母父馬データマージ")
+        df_father_mon = self.fathermon_data_process()
+
+        df_father_mon = df_father_mon.rename(columns={'father_fathermon': 'fathermon'})
+        main_df = dd.merge(main_df, df_father_mon, on='fathermon', how='left')
+
+        del df_father_mon
+        gc.collect()
+
+        print("完了！！！！")
 
         return main_df.to_csv('Keiba/datafile/pred_data/testcsvdataframe.csv', encoding='utf_8_sig', index=False)
 
@@ -391,14 +486,23 @@ class TestDataProcess:
 
         df = pd.read_csv('Keiba/datafile/pred_data/testcsvdataframe.csv')
 
+        fillna_list = df.loc[:, 'holdout_ts_jockey':].columns.tolist()
+
+        for fillna_col in fillna_list:
+            df[fillna_col] = df[fillna_col].fillna(df[fillna_col].mean())
+
         df = df.dropna(how="any")
-        df = df.rename(columns={"('speedindex', 'mean')": "speedmean", "('speedindex', 'max')": "speedmax", "('speedindex', 'min')": "speedmin",
+
+        df = df.rename(columns={"('speedindex', 'max')": "speedmax",
                                 "('pop', 'mean')": "popmean", "('pop', 'max')": "popmax", "('pop', 'min')": "popmin",
                                 "('odds', 'mean')": "oddsmean", "('odds', 'max')": "oddsmax", "('odds', 'min')": "oddsmin",
-                                "('3ftime', 'mean')": "3ftimemean", "('3ftime', 'max')": "3ftimemax", "('3ftime', 'min')": "3ftimemin",
+                                "('3ftime', 'min')": "3ftimemin", "('speedindex', 'max')": 'speedmax',
+                                "('count', 'sum')": "count5sum", "('rentai', 'sum')": "rentai5sum"
                                 })
 
         # 　特徴量生成
+        df['flag_konkan'] = (df['distance'] % 400 == 0).astype(int)
+        df['flag_pre_konkan'] = (df['pre_distance'] % 400 == 0).astype(int)
         df['odds_hi'] = (df['odds'] / df['pop'])
         df['re_odds_hi'] = (df['pre_odds'] / df['pre_pop'])
         df['odds_hi*2'] = df['odds_hi'] ** 2
@@ -408,18 +512,19 @@ class TestDataProcess:
         df['re_pop_now_pop'] = (df['pre_pop'] - df['pop'])
         df['re_odds_now_odds'] = (df['pre_odds'] - df['odds'])
         df['re_result_to_pop'] = (df['pre_result'] - df['pre_pop'])
-        df['speedmax_speedmin'] = df['speedmax'] - df['speedmin']
         df['popmax_popmin'] = df['popmax'] - df['popmin']
         df['oddsmax_oddsmin'] = df['oddsmax'] - df['oddsmin']
-        df['3ftimemax_3ftimemin'] = df['3ftimemax'] - df['3ftimemin']
+        df['rentai_ritu'] = ((df["rentai5sum"] / df["count5sum"])).round(3)
 
         feature_list = ['odds_hi', 're_odds_hi', 'odds_hi*2', 're_odds_hi*2', 're_3_to_4time', 're_3_to_4time_hi*2',
-                        're_pop_now_pop', 're_odds_now_odds', 're_result_to_pop', 'speedmax_speedmin', 'popmax_popmin',
-                        'popmax_popmin', 'oddsmax_oddsmin', '3ftimemax_3ftimemin']
+                        're_pop_now_pop', 're_odds_now_odds', 're_result_to_pop', 'popmax_popmin', 'popmax_popmin', 'rentai_ritu']
 
         for feature in feature_list:
             df[feature] = df[feature].replace([np.inf, -np.inf], np.nan)
             df[feature] = df[feature].fillna(0)
+
+        drop_list_cols = ['odds', 'pop', "rentai5sum", "count5sum", 'count', 'rentai']
+        df = df.drop(drop_list_cols, axis=1)
 
         return df
 

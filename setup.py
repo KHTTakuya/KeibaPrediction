@@ -32,7 +32,7 @@ if __name__ == '__main__':
     # 処理開始
     start = time.time()
     # 処理内容(flag=True or Falseに書き換えは可)
-    prediction = create_keiba_prediction(main_data, flag=False)
+    prediction = create_keiba_prediction(main_data)
     print(prediction)
     # 処理終了
     process_time = time.time() - start
