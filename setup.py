@@ -22,8 +22,6 @@ def create_keiba_prediction(csv_data, flag=True):
     tnf_model = PredictModelTF(df_tnf).models()
     ans_data1 = MergeModelDataToCsv(df_merge, gbm_model, tnf_model)
 
-    return ans_data1.merged_data()
-
 
 if __name__ == '__main__':
     warnings.simplefilter('ignore')
@@ -32,7 +30,7 @@ if __name__ == '__main__':
     # 処理開始
     start = time.time()
     # 処理内容(flag=True or Falseに書き換えは可)
-    prediction = create_keiba_prediction(main_data)
+    prediction = create_keiba_prediction(main_data, flag=False)
     print(prediction)
     # 処理終了
     process_time = time.time() - start

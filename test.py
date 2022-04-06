@@ -1,5 +1,4 @@
 import warnings
-import pandas as pd
 
 from Keiba.testfile.test_dataprocess import TestDataProcess
 from Keiba.testfile.test_models import TestPredictionModelGBM, TestPredictModelTF, TestMergeModelDataToCsv
@@ -7,7 +6,7 @@ from Keiba.testfile.test_models import TestPredictionModelGBM, TestPredictModelT
 
 def combine(data):
     start = TestDataProcess(data)
-    df = start.add_feature_formatting_process()
+    df = start.add_feature_formatting_process(switch=False)
     df_new = df.copy()
     df_tnf = df.copy()
     gbm_model = TestPredictionModelGBM(df).model()

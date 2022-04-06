@@ -133,7 +133,7 @@ class DataProcess:
         df.loc[df['result'] >= 4, 'result'] = 0
         df.loc[(df['result'] <= 3) & (df['result'] >= 1), 'result'] = 1
 
-        # 各ジョッキーの連対率（2021年1月1日まで集計対象）
+        # 各ジョッキーコース別の複勝率（2021年1月1日まで集計対象）
         table_jockey = pd.pivot_table(df, index='jocky', columns='place', values='result', aggfunc='mean', dropna=False)
         table_jockey = table_jockey.fillna(0)
 
@@ -366,10 +366,8 @@ class DataProcess:
         agg_list = {
             "pop": ['mean', 'max', 'min'],
             "odds": ['mean', 'max', 'min'],
-            "3ftime": ['min'],
-            "speedindex": ['max'],
-            "count": ['sum'],
-            "rentai": ['sum'],
+            "3ftime": ['mean', 'max', 'min'],
+            "speedindex": ['mean', 'max', 'min'],
         }
 
         # renamesurukoto
@@ -377,8 +375,7 @@ class DataProcess:
             name_df = name_days_df[name_days_df['horsename'] == name]
             shift_name_df = name_df[["place", "turf", "distance", "pop", "odds", "rank3",
                                      "rank4", "3ftime", "result", 'speedindex', 'last_race_index']].shift(1)
-            rolling_name_df = name_df[["pop", "odds", "3ftime", 'speedindex', 'count', 'rentai']].rolling(5,
-                                                                                                          min_periods=2) \
+            rolling_name_df = name_df[["pop", "odds", "3ftime", 'speedindex']].rolling(5, min_periods=2) \
                 .agg(agg_list)
             shift_name_df['horsename'] = name
             rolling_name_df['horsename'] = name
@@ -487,11 +484,10 @@ class DataProcess:
 
         df = df.dropna(how="any")
 
-        df = df.rename(columns={"('speedindex', 'max')": "speedmax", "('pop', 'mean')": "popmean",
-                                "('pop', 'max')": "popmax", "('pop', 'min')": "popmin",
-                                "('odds', 'mean')": "oddsmean", "('odds', 'max')": "oddsmax",
-                                "('odds', 'min')": "oddsmin", "('3ftime', 'min')": "3ftimemin",
-                                "('count', 'sum')": "count5sum", "('rentai', 'sum')": "rentai5sum"
+        df = df.rename(columns={"('speedindex', 'max')": "speedmax", "('speedindex', 'min')": "speedmin", "('speedindex', 'mean')": "speedmean",
+                                "('pop', 'mean')": "popmean", "('pop', 'max')": "popmax", "('pop', 'min')": "popmin",
+                                "('odds', 'mean')": "oddsmean", "('odds', 'max')": "oddsmax", "('odds', 'min')": "oddsmin",
+                                "('3ftime', 'min')": "3ftimemin", "('3ftime', 'max')": "3ftimemax", "('3ftime', 'mean')": "3ftimemean",
                                 })
 
         # 　特徴量生成
@@ -508,17 +504,15 @@ class DataProcess:
         df['re_result_to_pop'] = (df['pre_result'] - df['pre_pop'])
         df['popmax_popmin'] = df['popmax'] - df['popmin']
         df['oddsmax_oddsmin'] = df['oddsmax'] - df['oddsmin']
-        df['rentai_ritu'] = (df["rentai5sum"] / df["count5sum"]).round(3)
 
         feature_list = ['odds_hi', 're_odds_hi', 'odds_hi*2', 're_odds_hi*2', 're_3_to_4time', 're_3_to_4time_hi*2',
-                        're_pop_now_pop', 're_odds_now_odds', 're_result_to_pop', 'popmax_popmin', 'popmax_popmin',
-                        'rentai_ritu']
+                        're_pop_now_pop', 're_odds_now_odds', 're_result_to_pop', 'popmax_popmin', 'popmax_popmin']
 
         for feature in feature_list:
             df[feature] = df[feature].replace([np.inf, -np.inf], np.nan)
             df[feature] = df[feature].fillna(0)
 
-        drop_list_cols = ['odds', 'pop', "rentai5sum", "count5sum", 'count', 'rentai']
+        drop_list_cols = ['odds', 'pop']
         df = df.drop(drop_list_cols, axis=1)
 
         return df

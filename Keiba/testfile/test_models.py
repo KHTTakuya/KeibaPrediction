@@ -1,6 +1,7 @@
 import gc
 import tensorflow as tf
 from imblearn.over_sampling import SMOTE
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from tensorflow import keras
 
 import optuna.integration.lightgbm as lgb
@@ -98,6 +99,13 @@ class TestPredictionModelGBM:
 
         predict = pd.DataFrame({"raceid": df_pred['raceid'],
                                 "gbm_pred": predict_proba})
+
+        preds = np.round(model.predict(X_test))
+
+        print('Accuracy score = \t {}'.format(accuracy_score(y_test, preds)))
+        print('Precision score = \t {}'.format(precision_score(y_test, preds)))
+        print('Recall score =   \t {}'.format(recall_score(y_test, preds)))
+        print('F1 score =      \t {}'.format(f1_score(y_test, preds)))
 
         return predict
 
@@ -321,9 +329,8 @@ class TestMergeModelDataToCsv:
         df['tf_pred'] = df['tf_pred'].astype(float)
 
         # gbm_pred, tf_pred
-        df['probability'] = ((df['gbm_pred'] * 0.45) + (df['tf_pred'] * 0.55)).round(2)
+        df['probability'] = ((df['gbm_pred'] * 0.55) + (df['tf_pred'] * 0.45)).round(2)
 
         df = df.drop_duplicates(subset=['raceid', 'horsename'])
-        df = df.drop(['gbm_pred', 'tf_pred'], axis=1)
 
-        return df.to_csv('ans.csv', encoding='utf_8_sig')
+        return df.to_csv('ans_test3.csv', encoding='utf_8_sig')

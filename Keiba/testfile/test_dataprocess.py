@@ -147,9 +147,14 @@ class TestDataProcess:
         table_jockey = pd.pivot_table(df, index='jocky', columns='place', values='result', aggfunc='mean', dropna=False)
         table_jockey = table_jockey.fillna(0)
 
+        means_jockey = df.groupby('jocky').mean()['result']
+
         table_jockey = pd.DataFrame(table_jockey)
-        table_jockey = table_jockey.round(4)
         table_jockey = table_jockey.add_prefix('jockey_')
+
+        table_jockey = pd.merge(table_jockey, means_jockey, how='left', on='jocky')
+        table_jockey = table_jockey.rename(columns={"result": "resultmean"})
+        table_jockey = table_jockey.round(4)
 
         # 主成分分析：次元削除
         pca = PCA()
@@ -159,7 +164,8 @@ class TestDataProcess:
         df_score = df_score.loc[:, :5]
         df_score = pd.DataFrame(data=df_score)
         df_score = df_score.rename(columns={0: 'jockey_pca1', 1: 'jockey_pca2', 2: 'jockey_pca3',
-                                            3: 'jockey_pca4', 4: 'jockey_pca5', 5: 'jockey_pca6'})
+                                            3: 'jockey_pca4', 4: 'jockey_pca5', 5: 'jockey_pca6',
+                                            6: 'jockey_pca7', 7: 'jockey_pca8'})
 
         # TargetEncoding：HoldOut
         df_jockey = df[['jocky', 'result']]
@@ -221,9 +227,13 @@ class TestDataProcess:
         table_father1 = table_father.fillna(0)
 
         time_3f = df.groupby(index).mean()['3ftime']
+        result_mean = df.groupby(index).mean()['result']
         time3f = pd.DataFrame(time_3f)
+        result_mean = pd.DataFrame(result_mean)
+        result_mean = result_mean.rename(columns={"result": "resultmean"})
 
         father = pd.merge(table_father1, time3f, on=index, how='left')
+        father = pd.merge(father, result_mean, on=index, how='left')
 
         father = father.round(3)
         father = father.add_prefix('{}_'.format(index))
@@ -298,9 +308,13 @@ class TestDataProcess:
         table_father1 = table_father.fillna(0)
 
         time_3f = df.groupby(index).mean()['3ftime']
+        result_mean = df.groupby(index).mean()['result']
         time3f = pd.DataFrame(time_3f)
+        result_mean = pd.DataFrame(result_mean)
+        result_mean = result_mean.rename(columns={"result": "resultmean"})
 
         father = pd.merge(table_father1, time3f, on=index, how='left')
+        father = pd.merge(father, result_mean, on=index, how='left')
 
         father = father.round(3)
         father = father.add_prefix('{}_'.format(index))
@@ -374,8 +388,9 @@ class TestDataProcess:
         agg_list = {
             "pop": ['mean', 'max', 'min'],
             "odds": ['mean', 'max', 'min'],
-            "3ftime": ['min'],
-            "speedindex": ['max'],
+            "3ftime": ['mean', 'max', 'min'],
+            "speedindex": ['mean', 'max', 'min'],
+            "result": ['mean'],
             "count": ['sum'],
             "rentai": ['sum'],
         }
@@ -385,8 +400,8 @@ class TestDataProcess:
             name_df = name_days_df[name_days_df['horsename'] == name]
             shift_name_df = name_df[["place", "turf", "distance", "pop", "odds", "rank3",
                                      "rank4", "3ftime", "result", 'speedindex', 'last_race_index']].shift(1)
-            rolling_name_df = name_df[["pop", "odds", "3ftime", 'speedindex', 'count', 'rentai']].rolling(5, min_periods=2)\
-                .agg(agg_list)
+            rolling_name_df = name_df[["pop", "odds", "3ftime", 'speedindex', "result", 'count', 'rentai']].rolling(5, min_periods=1)\
+                .agg(agg_list).shift(1)
             shift_name_df['horsename'] = name
             rolling_name_df['horsename'] = name
 
@@ -491,13 +506,11 @@ class TestDataProcess:
         for fillna_col in fillna_list:
             df[fillna_col] = df[fillna_col].fillna(df[fillna_col].mean())
 
-        df = df.dropna(how="any")
-
-        df = df.rename(columns={"('speedindex', 'max')": "speedmax",
+        df = df.rename(columns={"('speedindex', 'max')": "speedmax", "('speedindex', 'mean')": "speedmean", "('speedindex', 'min')": "speedmin",
                                 "('pop', 'mean')": "popmean", "('pop', 'max')": "popmax", "('pop', 'min')": "popmin",
                                 "('odds', 'mean')": "oddsmean", "('odds', 'max')": "oddsmax", "('odds', 'min')": "oddsmin",
-                                "('3ftime', 'min')": "3ftimemin", "('speedindex', 'max')": 'speedmax',
-                                "('count', 'sum')": "count5sum", "('rentai', 'sum')": "rentai5sum"
+                                "('3ftime', 'min')": "3ftimemin", "('3ftime', 'mean')": "3ftimemean", "('3ftime', 'max')": "3ftimemax",
+                                "('count', 'sum')": "count5sum", "('rentai', 'sum')": "rentai5sum", "('result', 'mean')": 'resultmean'
                                 })
 
         # 　特徴量生成
@@ -525,6 +538,12 @@ class TestDataProcess:
 
         drop_list_cols = ['odds', 'pop', "rentai5sum", "count5sum", 'count', 'rentai']
         df = df.drop(drop_list_cols, axis=1)
+
+        re_fillna_list = df.loc[:, 'popmean': 'speedmean'].columns.tolist()
+        for fillna_col in re_fillna_list:
+            df[fillna_col] = df[fillna_col].fillna(df[fillna_col].mean())
+
+        df = df.dropna(how="any")
 
         return df
 
