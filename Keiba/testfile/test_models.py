@@ -333,4 +333,4 @@ class TestMergeModelDataToCsv:
 
         df = df.drop_duplicates(subset=['raceid', 'horsename'])
 
-        return df.to_csv('ans_test3.csv', encoding='utf_8_sig')
+        return df.to_csv('ans_test2.csv', encoding='utf_8_sig')
